@@ -68,24 +68,28 @@ class RestaurantCard extends StatelessWidget {
                   if (restaurant.discountPercent != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 5),
-                      child: Row(
-                        children: [
-                          Text(
-                            CurrencyFormatter.format(15),
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.accent,
-                              decoration: TextDecoration.lineThrough,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          children: [
+                            Text(
+                              CurrencyFormatter.format(15),
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.accent,
+                                decoration: TextDecoration.lineThrough,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            CurrencyFormatter.format(10.50),
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w800,
+                            const SizedBox(width: 4),
+                            Text(
+                              CurrencyFormatter.format(10.50),
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     )
                   else

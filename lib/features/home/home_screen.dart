@@ -171,7 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SliverToBoxAdapter(child: CampusMapPreview()),
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 110,
+              height: 154,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
