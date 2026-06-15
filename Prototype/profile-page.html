@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uni Eats — Profile</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  h2 { color: #fff; font-size: 18px; text-align: center; margin-bottom: 2px; }
+  .subtitle { color: #888; font-size: 13px; text-align: center; margin-bottom: 10px; }
+
+  .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 8px; }
+  .ctrl-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #aaa; border-radius: 20px; padding: 6px 16px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+  .ctrl-btn.active { background: #02BA26; border-color: #02BA26; color: #fff; font-weight: 700; }
+
+  .phone { width: 320px; border-radius: 40px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.5); display: flex; flex-direction: column; height: 680px; }
+  .phone-body { flex: 1; overflow-y: auto; scrollbar-width: none; min-height: 0; padding-bottom: 8px; }
+  .phone-body::-webkit-scrollbar { display: none; }
+  .phone-label { text-align: center; font-size: 13px; font-weight: 700; margin-top: 12px; padding: 4px 14px; border-radius: 20px; display: inline-block; }
+
+  /* DARK */
+  .dark { background: #222C22; }
+  .dark .surface  { background: #2A362A; }
+  .dark .text-primary   { color: #EFF4EF; }
+  .dark .text-secondary { color: #8AA08A; }
+  .dark .text-muted     { color: #506050; }
+  .dark .pill-nav { background: #2A362A; box-shadow: 0 8px 32px rgba(2,186,38,0.18); }
+  .dark .row-card { background: #2A362A; }
+  .dark .sep { background: rgba(255,255,255,0.05); }
+  .dark .toggle-track-off { background: #303E30; }
+  .dark .tag-green { background: #1C3A1C; color: #02BA26; }
+  .dark .section-lbl-clr { color: #506050; }
+  .dark .icon-wrap { background: #303E30; }
+  .dark .chevron { color: #3A4E3A; }
+  .dark .danger-row { color: #FF4444; }
+  .dark .student-id-card { background: linear-gradient(135deg, #1C3A1C, #2A4A2A); border: 1px solid rgba(2,186,38,0.2); }
+  .dark .loyalty-bar-bg { background: #303E30; }
+  .dark .diet-chip { background: #303E30; border: 1px solid rgba(255,255,255,0.08); color: #8AA08A; }
+  .dark .diet-chip.active { background: rgba(2,186,38,0.15); border-color: #02BA26; color: #02BA26; }
+  .dark .fav-item { background: #2A362A; }
+  .dark .fav-item-sep { background: rgba(255,255,255,0.05); }
+  .dark .notif-sub-row { background: rgba(255,255,255,0.03); }
+  .dark .referral-card { background: linear-gradient(135deg, #1A2E1A, #223022); border: 1px solid rgba(2,186,38,0.25); }
+
+  /* LIGHT */
+  .light { background: #EFF3EE; }
+  .light .surface  { background: #ffffff; }
+  .light .text-primary   { color: #0D1F0D; }
+  .light .text-secondary { color: #5A7A5A; }
+  .light .text-muted     { color: #9AB09A; }
+  .light .pill-nav { background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .light .row-card { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .light .sep { background: rgba(0,0,0,0.05); }
+  .light .toggle-track-off { background: #D8E8D8; }
+  .light .tag-green { background: #E8F5E8; color: #02BA26; }
+  .light .section-lbl-clr { color: #9AB09A; }
+  .light .icon-wrap { background: #F0F5F0; }
+  .light .chevron { color: #C8D8C8; }
+  .light .danger-row { color: #D03030; }
+  .light .student-id-card { background: linear-gradient(135deg, #E8F5E8, #D0ECD0); border: 1px solid rgba(2,186,38,0.3); }
+  .light .loyalty-bar-bg { background: #E0EBE0; }
+  .light .diet-chip { background: #F0F5F0; border: 1px solid rgba(0,0,0,0.08); color: #5A7A5A; }
+  .light .diet-chip.active { background: rgba(2,186,38,0.12); border-color: #02BA26; color: #02BA26; }
+  .light .fav-item { background: #fff; }
+  .light .fav-item-sep { background: rgba(0,0,0,0.05); }
+  .light .notif-sub-row { background: rgba(0,0,0,0.02); }
+  .light .referral-card { background: linear-gradient(135deg, #F0FFF0, #E8F8E8); border: 1px solid rgba(2,186,38,0.3); }
+
+  /* Status bar */
+  .status-bar { padding: 10px 20px 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+
+  /* Hero */
+  .profile-hero { padding: 14px 20px 16px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .avatar-wrap { position: relative; flex-shrink: 0; }
+  .avatar { width: 62px; height: 62px; border-radius: 50%; background: linear-gradient(135deg, #02BA26, #106C2F); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; color: #fff; border: 3px solid #02BA26; }
+  .avatar-edit { position: absolute; bottom: 0; right: 0; width: 20px; height: 20px; background: #FF7A00; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .udst-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(2,186,38,0.12); border: 1px solid rgba(2,186,38,0.25); border-radius: 20px; padding: 3px 8px; margin-top: 4px; }
+
+  /* Student ID card */
+  .student-id-card { margin: 0 16px 14px; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+  .id-photo { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #02BA26, #106C2F); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: #fff; flex-shrink: 0; }
+  .id-barcode { display: flex; align-items: flex-end; gap: 1px; height: 24px; }
+  .id-barcode span { background: currentColor; display: block; border-radius: 1px; }
+
+  /* Wallet mini card */
+  .wallet-mini { margin: 0 16px 14px; border-radius: 16px; background: linear-gradient(135deg, #02BA26, #106C2F); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; position: relative; overflow: hidden; cursor: pointer; }
+
+  /* Loyalty section */
+  .loyalty-section { margin: 0 16px 14px; border-radius: 14px; padding: 13px 14px; }
+  .loyalty-bar-bg { border-radius: 99px; height: 6px; margin: 6px 0 4px; overflow: hidden; }
+  .loyalty-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #02BA26, #FF7A00); }
+  .loyalty-tier-dots { display: flex; justify-content: space-between; }
+
+  /* Stats row */
+  .stats-row { margin: 0 16px 14px; border-radius: 14px; padding: 12px 0; display: flex; }
+  .stat-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stat-divider { width: 1px; background: rgba(128,128,128,0.15); margin: 4px 0; }
+
+  /* Referral card */
+  .referral-card { margin: 0 16px 14px; border-radius: 14px; padding: 12px 14px; }
+  .referral-code { font-family: monospace; font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #02BA26; background: rgba(2,186,38,0.1); border: 1px dashed rgba(2,186,38,0.4); border-radius: 8px; padding: 6px 12px; display: inline-block; margin-top: 4px; }
+
+  /* Favourite restaurants */
+  .fav-list { margin: 0 16px 14px; border-radius: 14px; overflow: hidden; }
+  .fav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; }
+  .fav-emoji { width: 32px; height: 32px; border-radius: 10px; background: rgba(2,186,38,0.12); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+
+  /* Section label */
+  .section-lbl { padding: 4px 20px 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
+
+  /* Row group */
+  .row-group { margin: 0 16px 12px; border-radius: 14px; overflow: hidden; }
+  .row-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; transition: opacity 0.15s; }
+  .row-item:hover { opacity: 0.75; }
+  .row-sep { height: 1px; margin: 0 14px; }
+  .icon-wrap { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .row-label { flex: 1; font-size: 12px; font-weight: 600; }
+  .row-value { font-size: 10px; color: #8AA08A; margin-right: 4px; }
+
+  /* Toggle */
+  .toggle-wrap { display: flex; align-items: center; }
+  .toggle-track { width: 36px; height: 20px; border-radius: 10px; position: relative; cursor: pointer; transition: background 0.25s; }
+  .toggle-thumb { position: absolute; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+  .toggle-on .toggle-track { background: #02BA26 !important; }
+  .toggle-on .toggle-thumb { left: 19px; }
+  .toggle-off .toggle-thumb { left: 3px; }
+
+  /* Diet chips */
+  .diet-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 12px; }
+  .diet-chip { border-radius: 20px; padding: 4px 10px; font-size: 9px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+
+  /* Notif sub-rows */
+  .notif-expand { overflow: hidden; transition: max-height 0.3s ease; max-height: 0; }
+  .notif-expand.open { max-height: 200px; }
+  .notif-sub-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 22px; }
+  .notif-sub-label { flex: 1; font-size: 11px; }
+
+  /* Logout */
+  .logout-btn { margin: 4px 16px 16px; border-radius: 12px; padding: 12px; text-align: center; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(255,68,68,0.3); }
+
+  /* Pill nav */
+  .pill-nav-wrap { padding: 6px 16px 14px; flex-shrink: 0; }
+  .pill-nav { border-radius: 50px; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 6px; }
+  .nav-dot { width: 4px; height: 4px; border-radius: 50%; background: #02BA26; }
+  .nav-cart-btn { width: 42px; height: 42px; background: #02BA26; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(2,186,38,0.4); position: relative; }
+  .cart-badge { position: absolute; top: -3px; right: -3px; background: #FF7A00; width: 14px; height: 14px; border-radius: 50%; font-size: 8px; color: #fff; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+
+  /* Lang pill */
+  .lang-pill { display: flex; border-radius: 20px; overflow: hidden; border: 1px solid rgba(2,186,38,0.3); }
+  .lang-opt { padding: 3px 10px; font-size: 9px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .lang-active { background: #02BA26; color: #fff; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  .pulse-anim { animation: pulse 2s ease-in-out infinite; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); background: #02BA26; color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 11px; font-weight: 700; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h2>Profile Tab</h2>
+<p class="subtitle">Loyalty · Student ID · Favourites · Dietary prefs · Notification controls</p>
+
+<div class="controls">
+  <button class="ctrl-btn active" id="mDark" onclick="setMode('dark')">🌙 Dark</button>
+  <button class="ctrl-btn" id="mLight" onclick="setMode('light')">☀️ Light</button>
+</div>
+
+<div style="display:flex;flex-direction:column;align-items:center;">
+<div class="phone dark" id="phone">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span style="font-size:10px;color:#8AA08A;font-weight:600;">9:41</span>
+    <div style="display:flex;gap:5px;align-items:center;">
+      <svg width="14" height="10" viewBox="0 0 14 10"><rect x="0" y="3" width="3" height="7" rx="0.5" fill="#8AA08A"/><rect x="4" y="2" width="3" height="8" rx="0.5" fill="#8AA08A"/><rect x="8" y="0" width="3" height="10" rx="0.5" fill="#02BA26"/></svg>
+      <svg width="22" height="10" viewBox="0 0 22 10"><rect x="0" y="1" width="18" height="8" rx="2" stroke="#8AA08A" stroke-width="1" fill="none"/><rect x="1.5" y="2.5" width="13" height="5" rx="1" fill="#02BA26"/><rect x="19" y="3.5" width="2" height="3" rx="1" fill="#8AA08A"/></svg>
+    </div>
+  </div>
+
+  <!-- Scrollable body -->
+  <div class="phone-body">
+
+    <!-- Profile hero -->
+    <div class="profile-hero">
+      <div class="avatar-wrap">
+        <div class="avatar">A</div>
+        <div class="avatar-edit">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="text-primary" style="font-size:18px;font-weight:900;letter-spacing:-0.3px;">Ahmed Hassan</div>
+        <div class="text-secondary" style="font-size:10px;margin-top:1px;">ahmed.hassan@udst.edu.qa</div>
+        <div class="udst-badge" style="margin-top:5px;">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M22 10v6M2 10l10-5 10 5-10 5z" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 12v5c3 3 9 3 12 0v-5" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="font-size:9px;color:#02BA26;font-weight:700;">UDST Student · CS Dept</span>
+        </div>
+      </div>
+      <div onclick="showToast('Profile editing coming soon!')" style="padding:6px 10px;border-radius:10px;border:1px solid rgba(2,186,38,0.3);font-size:9px;font-weight:700;color:#02BA26;cursor:pointer;flex-shrink:0;">Edit</div>
+    </div>
+
+    <!-- Student ID card -->
+    <div class="student-id-card">
+      <div class="id-photo">A</div>
+      <div style="flex:1;min-width:0;">
+        <div class="text-primary" style="font-size:11px;font-weight:800;">Ahmed Hassan</div>
+        <div class="text-secondary" style="font-size:9px;">Student ID: 2022-CS-0847</div>
+        <div style="font-size:9px;color:#02BA26;font-weight:700;margin-top:1px;">Computer Science • Year 3</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        <div class="id-barcode" style="color:#02BA26;">
+          <span style="width:1.5px;height:18px;"></span><span style="width:3px;height:22px;"></span><span style="width:1.5px;height:14px;"></span><span style="width:2px;height:20px;"></span><span style="width:1px;height:16px;"></span><span style="width:2.5px;height:22px;"></span><span style="width:1.5px;height:12px;"></span><span style="width:2px;height:18px;"></span><span style="width:1px;height:20px;"></span>
+        </div>
+        <div style="font-size:7px;color:#8AA08A;letter-spacing:1px;">2022-CS-0847</div>
+      </div>
+    </div>
+
+    <!-- Wallet mini card -->
+    <div class="wallet-mini" onclick="window.location.href='wallet-page.html'">
+      <div style="position:absolute;top:-16px;right:-16px;width:80px;height:80px;background:rgba(255,255,255,0.07);border-radius:50%;"></div>
+      <div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.6);letter-spacing:0.8px;margin-bottom:3px;">UNI EATS WALLET</div>
+        <div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:-0.5px;">QAR 47.50</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.5);margin-top:2px;">●●●● 4821 · Valid 12/27</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <div onclick="window.location.href='wallet-page.html'" style="background:rgba(255,255,255,0.18);border-radius:20px;padding:6px 14px;font-size:9px;font-weight:700;color:#fff;cursor:pointer;">+ TOP UP</div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row surface">
+      <div class="stat-item">
+        <div class="text-primary" style="font-size:18px;font-weight:900;">24</div>
+        <div class="text-muted" style="font-size:9px;">Orders</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div style="font-size:18px;font-weight:900;color:#FFB800;">4.8 ★</div>
+        <div class="text-muted" style="font-size:9px;">Avg Rating</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div style="font-size:18px;font-weight:900;color:#FF7A00;">QR 18</div>
+        <div class="text-muted" style="font-size:9px;">Avg Spend</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <div style="font-size:18px;font-weight:900;color:#02BA26;">Gold</div>
+        <div class="text-muted" style="font-size:9px;">Tier</div>
+      </div>
+    </div>
+
+    <!-- Loyalty Points -->
+    <div class="section-lbl section-lbl-clr">Loyalty & Rewards</div>
+    <div class="loyalty-section row-card" style="margin:0 16px 14px;border-radius:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="text-primary" style="font-size:13px;font-weight:800;">🏆 Gold Member</div>
+          <div class="text-secondary" style="font-size:9px;margin-top:1px;">2,340 pts · 160 pts to Platinum</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:900;color:#FFB800;">2,340</div>
+          <div style="font-size:9px;color:#8AA08A;">points</div>
+        </div>
+      </div>
+      <div class="loyalty-bar-bg" style="margin-top:8px;">
+        <div class="loyalty-bar-fill" style="width:93.6%;"></div>
+      </div>
+      <div class="loyalty-tier-dots" style="margin-top:4px;">
+        <div style="font-size:8px;color:#02BA26;font-weight:700;">Silver<br><span style="color:#8AA08A;">1,000</span></div>
+        <div style="font-size:8px;color:#FFB800;font-weight:700;text-align:center;">Gold ●<br><span style="color:#8AA08A;">2,000</span></div>
+        <div style="font-size:8px;color:#8AA08A;font-weight:700;text-align:right;">Platinum<br>2,500</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <div onclick="showToast('Redeeming points…')" style="flex:1;background:rgba(2,186,38,0.12);border:1px solid rgba(2,186,38,0.3);border-radius:8px;padding:7px 0;text-align:center;font-size:9px;font-weight:700;color:#02BA26;cursor:pointer;">Redeem Points</div>
+        <div onclick="showToast('Viewing rewards catalog…')" style="flex:1;background:rgba(255,184,0,0.1);border:1px solid rgba(255,184,0,0.3);border-radius:8px;padding:7px 0;text-align:center;font-size:9px;font-weight:700;color:#FFB800;cursor:pointer;">View Rewards</div>
+      </div>
+    </div>
+
+    <!-- Referral -->
+    <div class="referral-card row-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div class="text-primary" style="font-size:11px;font-weight:800;">🎁 Refer a Friend</div>
+          <div class="text-secondary" style="font-size:9px;margin-top:2px;">Earn 100 pts per referral</div>
+        </div>
+        <div onclick="copyCode()" style="background:#02BA26;border-radius:8px;padding:5px 10px;font-size:9px;font-weight:700;color:#fff;cursor:pointer;">Share</div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+        <div class="referral-code" id="refCode">AHMED100</div>
+        <div onclick="copyCode()" style="font-size:9px;color:#8AA08A;cursor:pointer;">Tap to copy →</div>
+      </div>
+      <div style="margin-top:6px;font-size:9px;color:#8AA08A;">3 friends joined · 300 pts earned</div>
+    </div>
+
+    <!-- Favourite Restaurants -->
+    <div class="section-lbl section-lbl-clr" style="margin-top:14px;">Favourite Restaurants</div>
+    <div class="fav-list row-card">
+      <div class="fav-item" onclick="showToast('Opening Tim Hortons…')">
+        <div class="fav-emoji">☕</div>
+        <div style="flex:1;min-width:0;">
+          <div class="text-primary" style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tim Hortons</div>
+          <div class="text-secondary" style="font-size:9px;">Building 3 · 4.7 ★</div>
+        </div>
+        <div style="font-size:9px;color:#02BA26;font-weight:700;">Open</div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="chevron" style="margin-left:4px;"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="fav-item-sep" style="height:1px;margin:0 14px;"></div>
+      <div class="fav-item" onclick="showToast('Opening Oakberry…')">
+        <div class="fav-emoji">🫐</div>
+        <div style="flex:1;min-width:0;">
+          <div class="text-primary" style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Oakberry</div>
+          <div class="text-secondary" style="font-size:9px;">Building 3 · 4.5 ★</div>
+        </div>
+        <div style="font-size:9px;color:#02BA26;font-weight:700;">Open</div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="chevron" style="margin-left:4px;"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="fav-item-sep" style="height:1px;margin:0 14px;"></div>
+      <div class="fav-item" onclick="showToast('Opening Edge Cafe…')">
+        <div class="fav-emoji">🍕</div>
+        <div style="flex:1;min-width:0;">
+          <div class="text-primary" style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Edge Cafe</div>
+          <div class="text-secondary" style="font-size:9px;">Building 9 · 4.6 ★</div>
+        </div>
+        <div style="font-size:9px;color:#FF7A00;font-weight:700;">Busy</div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" class="chevron" style="margin-left:4px;"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="padding:8px 14px;text-align:center;font-size:9px;color:#02BA26;font-weight:700;cursor:pointer;" onclick="showToast('Showing all favourites…')">See all 6 favourites →</div>
+    </div>
+
+    <!-- Dietary Preferences -->
+    <div class="section-lbl section-lbl-clr" style="margin-top:2px;">Dietary Preferences</div>
+    <div class="row-card" style="margin:0 16px 12px;border-radius:14px;padding:10px 0 4px;">
+      <div style="padding:0 14px 6px;" class="text-secondary" style="font-size:9px;">Used to filter menus and tag items</div>
+      <div class="diet-chips">
+        <div class="diet-chip active" onclick="toggleDiet(this)">🥩 Halal Only</div>
+        <div class="diet-chip" onclick="toggleDiet(this)">🌱 Vegetarian</div>
+        <div class="diet-chip" onclick="toggleDiet(this)">🌿 Vegan</div>
+        <div class="diet-chip active" onclick="toggleDiet(this)">🥜 Nut-free</div>
+        <div class="diet-chip" onclick="toggleDiet(this)">🌾 Gluten-free</div>
+        <div class="diet-chip" onclick="toggleDiet(this)">🥛 Dairy-free</div>
+        <div class="diet-chip" onclick="toggleDiet(this)">🌶️ No Spicy</div>
+      </div>
+    </div>
+
+    <!-- Account section -->
+    <div class="section-lbl section-lbl-clr">Account</div>
+    <div class="row-group row-card">
+
+      <div class="row-item" onclick="showToast('Opening edit profile…')">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="#02BA26" stroke-width="2"/></svg>
+        </div>
+        <div class="row-label text-primary">Edit Profile</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="window.location.href='wallet-page.html'">
+        <div class="icon-wrap" style="background:rgba(255,122,0,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="#FF7A00" stroke-width="2"/><path d="M2 10h20" stroke="#FF7A00" stroke-width="2"/></svg>
+        </div>
+        <div class="row-label text-primary">Wallet & Top-up</div>
+        <div class="row-value">QAR 47.50</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="showToast('Opening saved addresses…')">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="#02BA26" stroke-width="2"/><circle cx="12" cy="10" r="3" stroke="#02BA26" stroke-width="2"/></svg>
+        </div>
+        <div class="row-label text-primary">Saved Locations</div>
+        <div class="row-value">2 saved</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="showToast('Opening payment methods…')">
+        <div class="icon-wrap" style="background:rgba(255,122,0,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Payment Methods</div>
+        <div class="row-value">QPay + Wallet</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+    </div>
+
+    <!-- Preferences section -->
+    <div class="section-lbl section-lbl-clr">Preferences</div>
+    <div class="row-group row-card">
+
+      <!-- Notifications with expandable sub-settings -->
+      <div class="row-item" onclick="toggleNotifExpand()">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Notifications</div>
+        <div class="row-value" style="font-size:9px;color:#02BA26;">3 active</div>
+        <div id="notifChevron" style="transition:transform 0.3s;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+
+      <div class="notif-expand" id="notifExpand">
+        <div class="notif-sub-row">
+          <div class="notif-sub-label text-secondary">Order Updates</div>
+          <div class="toggle-wrap">
+            <div class="toggle-track toggle-on" id="tNotifOrder" onclick="event.stopPropagation();toggleSwitch('tNotifOrder')">
+              <div class="toggle-thumb" style="left:19px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notif-sub-row">
+          <div class="notif-sub-label text-secondary">Promotions & Deals</div>
+          <div class="toggle-wrap">
+            <div class="toggle-track toggle-on" id="tNotifPromo" onclick="event.stopPropagation();toggleSwitch('tNotifPromo')">
+              <div class="toggle-thumb" style="left:19px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notif-sub-row">
+          <div class="notif-sub-label text-secondary">Driver Nearby</div>
+          <div class="toggle-wrap">
+            <div class="toggle-track toggle-on" id="tNotifDriver" onclick="event.stopPropagation();toggleSwitch('tNotifDriver')">
+              <div class="toggle-thumb" style="left:19px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notif-sub-row" style="padding-bottom:10px;">
+          <div class="notif-sub-label text-secondary">Loyalty & Rewards</div>
+          <div class="toggle-wrap">
+            <div class="toggle-track toggle-off" id="tNotifLoyalty" onclick="event.stopPropagation();toggleSwitch('tNotifLoyalty')">
+              <div class="toggle-thumb" style="left:3px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row-sep sep"></div>
+
+      <!-- Dark mode toggle -->
+      <div class="row-item">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Dark Mode</div>
+        <div class="toggle-wrap">
+          <div class="toggle-track toggle-on" id="toggleDark" onclick="toggleDarkMode()">
+            <div class="toggle-thumb" style="left:19px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row-sep sep"></div>
+
+      <!-- Language -->
+      <div class="row-item">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#02BA26" stroke-width="2"/><path d="M12 3c-4 4-4 14 0 18M12 3c4 4 4 14 0 18M3 12h18" stroke="#02BA26" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Language</div>
+        <div class="lang-pill" id="langPill">
+          <div class="lang-opt lang-active" id="langEN" onclick="setLang('en')">EN</div>
+          <div class="lang-opt" id="langAR" onclick="setLang('ar')" style="color:#8AA08A;">AR</div>
+        </div>
+      </div>
+
+      <div class="row-sep sep"></div>
+
+      <!-- Default delivery location -->
+      <div class="row-item" onclick="showToast('Set default drop-off on campus map…')">
+        <div class="icon-wrap" style="background:rgba(255,122,0,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 0 0 1 1h3m10-11l2 2m-2-2v10a1 1 0 0 1-1 1h-3" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Default Drop-off</div>
+        <div class="row-value">B3, Room 204</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+    </div>
+
+    <!-- Support section -->
+    <div class="section-lbl section-lbl-clr">Support</div>
+    <div class="row-group row-card">
+
+      <div class="row-item" onclick="showToast('Opening Help & Support…')">
+        <div class="icon-wrap" style="background:rgba(255,122,0,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Help & Support</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="showToast('Reporting an issue…')">
+        <div class="icon-wrap" style="background:rgba(255,68,68,0.1);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="#FF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" stroke="#FF4444" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#FF4444" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Report a Problem</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="showToast('About Uni Eats v2.0.0')">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#02BA26" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="#02BA26" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="row-label text-primary">About Uni Eats</div>
+        <div class="row-value">v2.0.0</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="row-sep sep"></div>
+
+      <div class="row-item" onclick="showToast('Opening Privacy Policy…')">
+        <div class="icon-wrap" style="background:rgba(2,186,38,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="row-label text-primary">Privacy Policy</div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" class="chevron"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+    </div>
+
+    <!-- Logout -->
+    <div class="logout-btn danger-row" onclick="showToast('Signing out…')" style="background:rgba(255,68,68,0.06);">
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Sign Out
+      </div>
+    </div>
+
+    <div style="height:8px;"></div>
+  </div><!-- /phone-body -->
+
+  <!-- Pill nav -->
+  <div class="pill-nav-wrap">
+    <div class="pill-nav">
+      <div class="nav-item" onclick="window.location.href='home-mockup-v4.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="nav-item" onclick="window.location.href='order-tracking.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="3 6 10 3 17 6 21 4 21 18 17 20 10 17 3 20 3 6" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </div>
+      <div class="nav-cart-btn" onclick="window.location.href='restaurant-detail.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="21" r="1" stroke="#fff" stroke-width="2"/><circle cx="20" cy="21" r="1" stroke="#fff" stroke-width="2"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="cart-badge">2</div>
+      </div>
+      <div class="nav-item" onclick="window.location.href='orders-page.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="nav-item" style="position:relative;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#02BA26"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="#02BA26"/></svg>
+        <div class="nav-dot"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /phone -->
+
+<div style="display:flex;justify-content:center;margin-top:10px;">
+  <span class="phone-label" id="modeLabel" style="background:#02BA26;color:#fff;">Dark Mode</span>
+</div>
+</div>
+
+<p class="subtitle" style="margin-top:8px;">Tap Notifications to expand sub-settings · Tap diet chips to toggle · Referral code copies on tap</p>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let isDark = true;
+  let notifOpen = false;
+
+  function setMode(m) {
+    isDark = (m === 'dark');
+    document.getElementById('phone').className = 'phone ' + m;
+    document.getElementById('mDark').classList.toggle('active', isDark);
+    document.getElementById('mLight').classList.toggle('active', !isDark);
+    const lbl = document.getElementById('modeLabel');
+    if(isDark) {
+      lbl.style.cssText = 'background:#02BA26;color:#fff;border:none;';
+      lbl.textContent = 'Dark Mode';
+    } else {
+      lbl.style.cssText = 'background:#EFF3EE;color:#0D1F0D;border:1px solid #C8D8C8;';
+      lbl.textContent = 'Light Mode';
+    }
+    const td = document.getElementById('toggleDark');
+    if(isDark) {
+      td.classList.add('toggle-on'); td.classList.remove('toggle-off');
+      td.querySelector('.toggle-thumb').style.left = '19px';
+    } else {
+      td.classList.remove('toggle-on'); td.classList.add('toggle-off');
+      td.querySelector('.toggle-thumb').style.left = '3px';
+    }
+  }
+
+  function toggleDarkMode() { setMode(isDark ? 'light' : 'dark'); }
+
+  function toggleSwitch(id) {
+    const el = document.getElementById(id);
+    const isOn = el.classList.contains('toggle-on');
+    if(isOn) {
+      el.classList.remove('toggle-on'); el.classList.add('toggle-off');
+      el.querySelector('.toggle-thumb').style.left = '3px';
+    } else {
+      el.classList.add('toggle-on'); el.classList.remove('toggle-off');
+      el.querySelector('.toggle-thumb').style.left = '19px';
+    }
+  }
+
+  function toggleNotifExpand() {
+    notifOpen = !notifOpen;
+    const el = document.getElementById('notifExpand');
+    el.classList.toggle('open', notifOpen);
+    document.getElementById('notifChevron').style.transform = notifOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  function toggleDiet(el) {
+    el.classList.toggle('active');
+  }
+
+  let lang = 'en';
+  function setLang(l) {
+    lang = l;
+    document.getElementById('langEN').classList.toggle('lang-active', l==='en');
+    document.getElementById('langAR').classList.toggle('lang-active', l==='ar');
+    document.getElementById('langEN').style.color = l==='en' ? '#fff' : '#8AA08A';
+    document.getElementById('langAR').style.color = l==='ar' ? '#fff' : '#8AA08A';
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  function copyCode() {
+    showToast('Code AHMED100 copied to clipboard!');
+  }
+</script>
+</body>
+</html>

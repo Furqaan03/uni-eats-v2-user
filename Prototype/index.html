@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uni Eats — App Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 24px;
+  }
+
+  .phone {
+    width: 320px;
+    height: 680px;
+    border-radius: 40px;
+    background: #222C22;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* Background circles */
+  .bg-circle-1 { position:absolute; width:320px; height:320px; border-radius:50%; background:radial-gradient(circle, rgba(2,186,38,0.12) 0%, transparent 70%); top:-60px; right:-60px; }
+  .bg-circle-2 { position:absolute; width:240px; height:240px; border-radius:50%; background:radial-gradient(circle, rgba(16,108,47,0.1) 0%, transparent 70%); bottom:-40px; left:-40px; }
+
+  .logo-wrap {
+    width: 90px; height: 90px; border-radius: 24px;
+    background: linear-gradient(135deg, #02BA26, #106C2F);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 16px 48px rgba(2,186,38,0.4);
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  .logo-wrap { animation: float 3s ease-in-out infinite; }
+
+  @keyframes pulse-ring {
+    0% { transform:scale(1); opacity:0.6; }
+    100% { transform:scale(1.5); opacity:0; }
+  }
+  .pulse-ring {
+    position: absolute; width: 90px; height: 90px; border-radius: 24px;
+    border: 2px solid rgba(2,186,38,0.4);
+    animation: pulse-ring 2s ease-out infinite;
+  }
+
+  .app-name {
+    font-size: 28px; font-weight: 900; color: #EFF4EF;
+    letter-spacing: -0.5px; margin-bottom: 6px;
+    position: relative; z-index: 1;
+  }
+  .app-name span { color: #02BA26; }
+
+  .tagline {
+    font-size: 12px; color: #8AA08A; text-align: center;
+    margin-bottom: 40px; line-height: 1.5;
+    position: relative; z-index: 1; max-width: 200px;
+  }
+
+  .start-btn {
+    background: linear-gradient(135deg, #02BA26, #106C2F);
+    color: #fff; border: none; border-radius: 50px;
+    padding: 14px 40px; font-size: 14px; font-weight: 800;
+    cursor: pointer; letter-spacing: 0.3px;
+    box-shadow: 0 8px 28px rgba(2,186,38,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative; z-index: 1;
+    text-decoration: none; display: inline-block;
+  }
+  .start-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(2,186,38,0.5); }
+  .start-btn:active { transform: scale(0.97); }
+
+  .version { font-size: 9px; color: #506050; margin-top: 16px; position: relative; z-index: 1; }
+
+  /* Status bar */
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 12px 20px 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  /* Flow diagram below */
+  .flow-wrap {
+    margin-top: 24px;
+    display: flex; align-items: center; gap: 0;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .flow-node {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 8px 14px;
+    font-size: 11px; color: #8AA08A; font-weight: 600;
+    cursor: pointer; text-decoration: none; display: block;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .flow-node:hover { background: rgba(2,186,38,0.12); border-color: rgba(2,186,38,0.4); color: #02BA26; }
+  .flow-node.entry { background: rgba(2,186,38,0.15); border-color: #02BA26; color: #02BA26; font-weight: 800; }
+  .flow-arrow { color: #3A4E3A; font-size: 14px; padding: 0 4px; }
+  .flow-label { font-size: 10px; color: #506050; text-align: center; margin-top: 4px; }
+  .flow-col { display: flex; flex-direction: column; align-items: center; }
+  .flow-branch { display: flex; flex-direction: column; gap: 6px; }
+</style>
+</head>
+<body>
+
+<!-- Phone splash -->
+<div class="phone">
+  <div class="bg-circle-1"></div>
+  <div class="bg-circle-2"></div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span style="font-size:10px;color:#8AA08A;font-weight:600;">9:41</span>
+    <div style="display:flex;gap:5px;align-items:center;">
+      <svg width="14" height="10" viewBox="0 0 14 10"><rect x="0" y="3" width="3" height="7" rx="0.5" fill="#8AA08A"/><rect x="4" y="2" width="3" height="8" rx="0.5" fill="#8AA08A"/><rect x="8" y="0" width="3" height="10" rx="0.5" fill="#02BA26"/></svg>
+      <svg width="22" height="10" viewBox="0 0 22 10"><rect x="0" y="1" width="18" height="8" rx="2" stroke="#8AA08A" stroke-width="1" fill="none"/><rect x="1.5" y="2.5" width="13" height="5" rx="1" fill="#02BA26"/><rect x="19" y="3.5" width="2" height="3" rx="1" fill="#8AA08A"/></svg>
+    </div>
+  </div>
+
+  <!-- Logo -->
+  <div style="position:relative;margin-bottom:20px;">
+    <div class="pulse-ring"></div>
+    <div class="logo-wrap">
+      <!-- Fork + leaf icon -->
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <path d="M14 8v8a4 4 0 0 0 4 4v12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M18 8v4M14 12h8" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M28 8c0 0 4 3 4 8s-4 8-4 8v8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="34" cy="10" r="3" fill="rgba(255,255,255,0.3)" stroke="#fff" stroke-width="1.5"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="app-name">Uni <span>Eats</span></div>
+  <div class="tagline">Campus food delivery for UDST students &amp; faculty</div>
+
+  <a class="start-btn" href="home-mockup-v4.html">Get Started →</a>
+  <div class="version">Prototype v2.0 · UDST Campus</div>
+</div>
+
+<!-- App flow map -->
+<div style="margin-top:28px;text-align:center;">
+  <div style="color:#506050;font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:12px;">APP FLOW — CLICK ANY SCREEN</div>
+
+  <div class="flow-wrap" style="gap:6px;align-items:flex-start;">
+
+    <div class="flow-col">
+      <a class="flow-node entry" href="home-mockup-v4.html">🏠 Home</a>
+      <div class="flow-label">Browse</div>
+    </div>
+    <div class="flow-arrow" style="margin-top:10px;">→</div>
+    <div class="flow-col">
+      <a class="flow-node" href="restaurant-detail.html">🍽 Restaurant</a>
+      <div class="flow-label">Menu &amp; Cart</div>
+    </div>
+    <div class="flow-arrow" style="margin-top:10px;">→</div>
+    <div class="flow-col">
+      <a class="flow-node" href="order-tracking.html">📍 Tracking</a>
+      <div class="flow-label">Live Map</div>
+    </div>
+
+    <!-- second row -->
+    <div style="width:100%;display:flex;justify-content:center;align-items:center;gap:6px;margin-top:6px;">
+      <div class="flow-arrow" style="visibility:hidden;">→</div>
+      <div class="flow-col">
+        <a class="flow-node" href="orders-page.html">📋 Orders</a>
+        <div class="flow-label">History</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-col">
+        <a class="flow-node" href="profile-page.html">👤 Profile</a>
+        <div class="flow-label">Account</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-col">
+        <a class="flow-node" href="wallet-page.html">💳 Wallet</a>
+        <div class="flow-label">Analytics</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uni Eats — Home v3</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  h2 { color: #fff; font-size: 18px; text-align: center; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 13px; text-align: center; margin-bottom: 20px; }
+  .phones-wrap { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  .phone { width: 320px; border-radius: 40px; overflow: hidden; position: relative; box-shadow: 0 32px 80px rgba(0,0,0,0.5); }
+  .phone-label { text-align: center; font-size: 13px; font-weight: 700; margin-top: 12px; padding: 4px 12px; border-radius: 20px; display: inline-block; }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; }
+  .phone-scroll { height: 680px; overflow-y: auto; padding-bottom: 80px; scrollbar-width: none; }
+  .phone-scroll::-webkit-scrollbar { display: none; }
+
+  /* DARK — lightened to #222C22 */
+  .dark { background: #222C22; }
+  .dark .surface { background: #2A362A; }
+  .dark .text-primary { color: #EFF4EF; }
+  .dark .text-secondary { color: #8AA08A; }
+  .dark .text-muted { color: #506050; }
+  .dark .chip-inactive { background: #2A362A; color: #8AA08A; }
+  .dark .pill-nav { background: #2A362A; box-shadow: 0 8px 32px rgba(2,186,38,0.18); }
+  .dark .search-bar { background: #2A362A; }
+  .dark .rest-card { background: #2A362A; }
+  .dark .list-card { background: #2A362A; }
+  .dark .filter-chip { border-color: #3A4E3A; color: #6A8A6A; }
+  .dark .badge-pill { background: #1C3A1C; color: #02BA26; }
+  .dark .map-bg { fill: #2A362A; }
+  .dark .map-building { fill: #303E30; stroke: #3A4E3A; }
+  .dark .map-label { fill: #506050; }
+  .dark .map-overlay { background: rgba(34,44,34,0.85); color: #02BA26; }
+
+  /* LIGHT */
+  .light { background: #EFF3EE; }
+  .light .surface { background: #ffffff; }
+  .light .text-primary { color: #0D1F0D; }
+  .light .text-secondary { color: #5A7A5A; }
+  .light .text-muted { color: #9AB09A; }
+  .light .chip-inactive { background: #fff; color: #5A7A5A; box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+  .light .pill-nav { background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .light .search-bar { background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .light .rest-card { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+  .light .list-card { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .light .filter-chip { border-color: #ddd; color: #888; }
+  .light .badge-pill { background: #E8F5E8; color: #02BA26; }
+  .light .map-bg { fill: #E6EDE5; }
+  .light .map-building { fill: #D4E0D4; stroke: #C0D0C0; }
+  .light .map-label { fill: #8AA08A; }
+  .light .map-overlay { background: rgba(255,255,255,0.88); color: #02BA26; }
+
+  .status-bar { padding: 10px 20px 0; display: flex; justify-content: space-between; align-items: center; }
+  .header { padding: 10px 20px 8px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .search-bar { margin: 0 16px 14px; border-radius: 50px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .chips { padding: 0 16px 14px; display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { border-radius: 50px; padding: 5px 13px; font-size: 10px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .chip-active { background: #02BA26; color: #fff; }
+  .section-header { padding: 2px 20px 8px; display: flex; justify-content: space-between; align-items: center; }
+  .section-title { font-size: 13px; font-weight: 800; }
+  .section-link { font-size: 10px; color: #02BA26; }
+  .wallet-card { margin: 0 16px 14px; background: linear-gradient(135deg, #02BA26 0%, #106C2F 100%); border-radius: 16px; padding: 16px; position: relative; overflow: hidden; }
+  .flash-banner { margin: 0 16px 14px; border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #FF7A00, #c45a00); }
+  .h-scroll { padding: 0 16px 14px; display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+  .h-scroll::-webkit-scrollbar { display: none; }
+  .rest-card { border-radius: 14px; flex-shrink: 0; width: 136px; overflow: hidden; }
+  .trend-card { border-radius: 14px; flex-shrink: 0; width: 180px; overflow: hidden; }
+  .rest-card-img { height: 80px; position: relative; }
+  .trend-card-img { height: 100px; position: relative; }
+  .open-badge { position: absolute; bottom: 6px; left: 8px; background: #02BA26; border-radius: 4px; padding: 2px 6px; font-size: 7px; color: #fff; font-weight: 700; }
+  .rest-card-body { padding: 8px 10px 10px; }
+  .rest-name { font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rest-meta { font-size: 9px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-card { margin: 0 16px 8px; border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+  .list-thumb { width: 58px; height: 58px; border-radius: 10px; flex-shrink: 0; }
+  .map-preview { margin: 0 16px 14px; border-radius: 14px; overflow: hidden; height: 110px; position: relative; }
+  .filter-bar { padding: 0 16px 8px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-chip { border-radius: 8px; padding: 5px 10px; font-size: 9px; font-weight: 600; white-space: nowrap; flex-shrink: 0; border: 1px solid; }
+  .filter-chip-active { border-color: #02BA26 !important; color: #02BA26 !important; }
+  .badge-pill { border-radius: 4px; padding: 2px 6px; font-size: 8px; font-weight: 600; background: #1C3A1C; color: #02BA26; }
+  .light .badge-pill { background: #E8F5E8; color: #02BA26; }
+  .dark .badge-pill { background: #1C3A1C; color: #02BA26; }
+
+  /* Pill nav */
+  .pill-nav { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); border-radius: 50px; padding: 10px 20px; display: flex; gap: 20px; align-items: center; z-index: 10; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+  .nav-dot { width: 4px; height: 4px; background: #02BA26; border-radius: 50%; }
+  .nav-cart-btn { width: 42px; height: 42px; background: #02BA26; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(2,186,38,0.4); position: relative; }
+  .cart-badge { position: absolute; top: -3px; right: -3px; background: #FF7A00; width: 14px; height: 14px; border-radius: 50%; font-size: 8px; color: #fff; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<h2>Home Screen — v3</h2>
+<p class="subtitle">Dark mode lightened to #222C22 · Nav bar icons added · Scroll inside phones</p>
+
+<div class="phones-wrap">
+
+  <!-- ===== DARK PHONE ===== -->
+  <div class="phone-wrap">
+    <div class="phone dark">
+      <div class="phone-scroll">
+
+        <div class="status-bar">
+          <span style="font-size:9px;color:#506050;">9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <div style="width:14px;height:6px;background:#02BA26;border-radius:2px;"></div>
+            <div style="width:6px;height:6px;background:#506050;border-radius:50%;"></div>
+          </div>
+        </div>
+
+        <div class="header">
+          <div>
+            <div style="font-size:10px;color:#506050;letter-spacing:0.5px;">GOOD AFTERNOON</div>
+            <div class="text-primary" style="font-size:20px;font-weight:900;letter-spacing:-0.5px;">Ahmed 👋</div>
+            <div style="font-size:10px;color:#02BA26;margin-top:2px;">UDST · Student</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="surface" style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;">
+              <!-- Bell icon -->
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8AA08A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <div style="position:absolute;top:4px;right:4px;width:7px;height:7px;background:#FF7A00;border-radius:50%;border:2px solid #222C22;"></div>
+            </div>
+            <div style="width:34px;height:34px;background:#02BA26;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;">A</div>
+          </div>
+        </div>
+
+        <div class="search-bar surface">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#506050" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span style="color:#506050;font-size:11px;">Search restaurants or dishes...</span>
+        </div>
+
+        <div class="wallet-card">
+          <div style="position:absolute;top:-15px;right:-15px;width:90px;height:90px;background:rgba(255,255,255,0.07);border-radius:50%;"></div>
+          <div style="position:absolute;bottom:-25px;right:25px;width:65px;height:65px;background:rgba(255,255,255,0.04);border-radius:50%;"></div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:1px;margin-bottom:2px;">UNI EATS WALLET</div>
+          <div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px;">QAR 47.50</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <div style="font-size:9px;color:rgba(255,255,255,0.35);">●●●● 4821</div>
+            <div style="background:rgba(255,255,255,0.15);border-radius:20px;padding:5px 14px;display:flex;align-items:center;gap:5px;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span style="font-size:9px;color:#fff;font-weight:700;">TOP UP</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip chip-active">All</div>
+          <div class="chip chip-inactive">☕ Coffee</div>
+          <div class="chip chip-inactive">🍔 Food</div>
+          <div class="chip chip-inactive">🥗 Healthy</div>
+          <div class="chip chip-inactive">🍰 Dessert</div>
+          <div class="chip chip-inactive">🥤 Drinks</div>
+        </div>
+
+        <!-- Flash Sale -->
+        <div class="section-header">
+          <span class="section-title text-primary">⚡ Flash Sale</span>
+          <span class="section-link" style="font-weight:700;">Ends 01:24:33</span>
+        </div>
+        <div class="flash-banner">
+          <div style="position:absolute;right:-10px;top:-10px;width:100px;height:100px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.65);margin-bottom:3px;letter-spacing:0.5px;">TODAY ONLY</div>
+            <div style="font-size:17px;font-weight:900;color:#fff;line-height:1.1;">30% OFF<br>Tim Hortons</div>
+            <div style="margin-top:8px;background:rgba(255,255,255,0.18);border-radius:20px;padding:5px 12px;display:inline-block;">
+              <span style="font-size:9px;color:#fff;font-weight:700;">ORDER NOW →</span>
+            </div>
+          </div>
+          <div style="width:64px;height:64px;background:rgba(255,255,255,0.12);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:28px;">☕</div>
+        </div>
+
+        <!-- Trending Now -->
+        <div class="section-header">
+          <span class="section-title text-primary">🔥 Trending Now</span>
+          <span class="section-link">See all</span>
+        </div>
+        <div class="h-scroll">
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);">
+              <div class="open-badge">OPEN</div>
+              <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.45);border-radius:6px;padding:3px 6px;font-size:8px;color:#FF7A00;font-weight:700;">#1 TODAY</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Tim Hortons</div>
+              <div class="rest-meta text-secondary">⭐ 4.8 · Building 3</div>
+              <div style="margin-top:5px;display:flex;align-items:center;gap:4px;">
+                <span style="font-size:9px;color:#FF7A00;text-decoration:line-through;">QAR 15</span>
+                <span style="font-size:10px;color:#02BA26;font-weight:800;">QAR 10.50</span>
+              </div>
+            </div>
+          </div>
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#2d4a1e,#1a3010);">
+              <div class="open-badge">OPEN</div>
+              <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.45);border-radius:6px;padding:3px 6px;font-size:8px;color:#02BA26;font-weight:700;">TRENDING</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Oakberry</div>
+              <div class="rest-meta text-secondary">⭐ 4.9 · Building 3</div>
+              <div style="margin-top:5px;font-size:10px;color:#02BA26;font-weight:800;">from QAR 18</div>
+            </div>
+          </div>
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#1a2a3a,#0d1a28);">
+              <div class="open-badge">OPEN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Edge Cafe</div>
+              <div class="rest-meta text-secondary">⭐ 4.6 · Building 9</div>
+              <div style="margin-top:5px;font-size:10px;color:#02BA26;font-weight:800;">from QAR 12</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Rated -->
+        <div class="section-header">
+          <span class="section-title text-primary">⭐ Top Rated</span>
+          <span class="section-link">See all</span>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#2d4a1e,#1a3010);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Oakberry</div>
+            <div class="rest-meta text-secondary">Açaí & Healthy · B3</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:4px;">
+              <span style="font-size:10px;color:#FFB800;">★★★★★</span>
+              <span style="font-size:9px;color:#506050;">4.9 (312)</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">5 min</div>
+            <div style="font-size:8px;color:#506050;">delivery</div>
+          </div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Tim Hortons B20</div>
+            <div class="rest-meta text-secondary">Coffee & Bakery · B20</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:4px;">
+              <span style="font-size:10px;color:#FFB800;">★★★★★</span>
+              <span style="font-size:9px;color:#506050;">4.8 (289)</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">12 min</div>
+            <div style="font-size:8px;color:#506050;">delivery</div>
+          </div>
+        </div>
+
+        <!-- Near Me -->
+        <div class="section-header" style="margin-top:4px;">
+          <span class="section-title text-primary">📍 Near Me</span>
+          <span class="section-link">Open map</span>
+        </div>
+        <div class="map-preview">
+          <svg width="100%" height="110" viewBox="0 0 288 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="288" height="110" class="map-bg"/>
+            <rect x="20" y="10" width="55" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="47" y="33" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B3</text>
+            <rect x="90" y="10" width="40" height="30" rx="4" class="map-building" stroke-width="1"/>
+            <text x="110" y="28" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B5</text>
+            <rect x="145" y="10" width="40" height="30" rx="4" class="map-building" stroke-width="1"/>
+            <text x="165" y="28" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B9</text>
+            <rect x="200" y="10" width="60" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="230" y="33" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B12</text>
+            <rect x="20" y="65" width="50" height="35" rx="4" class="map-building" stroke-width="1"/>
+            <text x="45" y="86" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B13</text>
+            <rect x="90" y="60" width="55" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="117" y="83" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B20</text>
+            <circle cx="47" cy="25" r="7" fill="#02BA26" opacity="0.9"/>
+            <text x="47" y="28.5" text-anchor="middle" fill="#fff" font-size="9">🍽</text>
+            <circle cx="47" cy="25" r="13" fill="none" stroke="#02BA26" stroke-width="1" opacity="0.3"/>
+            <circle cx="165" cy="20" r="7" fill="#FF7A00" opacity="0.9"/>
+            <text x="165" y="23.5" text-anchor="middle" fill="#fff" font-size="9">☕</text>
+            <circle cx="117" cy="75" r="7" fill="#02BA26" opacity="0.9"/>
+            <text x="117" y="78.5" text-anchor="middle" fill="#fff" font-size="9">🍽</text>
+            <circle cx="90" cy="50" r="7" fill="#fff"/>
+            <circle cx="90" cy="50" r="4" fill="#106C2F"/>
+            <circle cx="90" cy="50" r="12" fill="none" stroke="#02BA26" stroke-width="1.5" opacity="0.5"/>
+          </svg>
+          <div class="map-overlay" style="position:absolute;bottom:8px;right:8px;border-radius:8px;padding:4px 8px;font-size:8px;font-weight:700;">3 places within 10 min</div>
+        </div>
+
+        <div class="h-scroll" style="margin-top:-6px;">
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#4a1a0a,#8B4513);">
+              <div class="open-badge">2 MIN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary" style="font-size:10px;">Caribou Coffee</div>
+              <div class="rest-meta text-secondary">E4 Courtyard</div>
+            </div>
+          </div>
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#0a2a1a,#1a4a2a);">
+              <div class="open-badge">5 MIN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary" style="font-size:10px;">JamKai</div>
+              <div class="rest-meta text-secondary">Building 3</div>
+            </div>
+          </div>
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#1a1a3a,#0d0d28);">
+              <div class="open-badge">8 MIN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary" style="font-size:10px;">Bold Café</div>
+              <div class="rest-meta text-secondary">Atrium 5</div>
+            </div>
+          </div>
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#2a1a0a,#4a3010);">
+              <div class="open-badge">9 MIN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary" style="font-size:10px;">L'Hardy</div>
+              <div class="rest-meta text-secondary">Building 12</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- All Restaurants -->
+        <div class="section-header" style="margin-top:6px;">
+          <span class="section-title text-primary">🏪 All Restaurants</span>
+          <span class="section-link">16 places</span>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-chip filter-chip-active">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:3px;vertical-align:middle;"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Nearest
+          </div>
+          <div class="filter-chip">Open Now</div>
+          <div class="filter-chip">Rating 4+</div>
+          <div class="filter-chip">Under 10 min</div>
+          <div class="filter-chip">Pickup Only</div>
+          <div class="filter-chip">Delivery Only</div>
+        </div>
+
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Tim Hortons</div>
+            <div class="rest-meta text-secondary">Coffee & Bakery · ⭐ 4.8</div>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <span class="badge-pill">Delivery</span>
+              <span class="badge-pill">Pickup</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">8 min</div>
+            <div style="font-size:8px;color:#506050;">B3</div>
+            <div style="font-size:8px;color:#FF7A00;font-weight:700;">30% OFF</div>
+          </div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#1a2a3a,#0d1a28);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Edge Cafe</div>
+            <div class="rest-meta text-secondary">Café · ⭐ 4.6</div>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <span class="badge-pill">Delivery</span>
+              <span class="badge-pill">Pickup</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">15 min</div>
+            <div style="font-size:8px;color:#506050;">B9</div>
+          </div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#3a2a0a,#6a4a10);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Ennabi 92</div>
+            <div class="rest-meta text-secondary">Qatari Cuisine · ⭐ 4.7</div>
+            <div style="display:flex;gap:4px;margin-top:4px;">
+              <span class="badge-pill">Pickup</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:8px;color:#506050;">Courtyard B4</div>
+          </div>
+        </div>
+        <div style="height:16px;"></div>
+      </div>
+
+      <!-- Pill nav with icons -->
+      <div class="pill-nav">
+        <!-- Home (active) -->
+        <div class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#02BA26" stroke="none"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <div class="nav-dot"></div>
+        </div>
+        <!-- Map -->
+        <div class="nav-item" onclick="window.location.href='order-tracking.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A4E3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        </div>
+        <!-- Cart (centre bubble) -->
+        <div style="position:relative;">
+          <div class="nav-cart-btn" onclick="window.location.href='restaurant-detail.html'" style="cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          </div>
+          <div class="cart-badge">2</div>
+        </div>
+        <!-- Orders -->
+        <div class="nav-item" onclick="window.location.href='orders-page.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A4E3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <!-- Profile -->
+        <div class="nav-item" onclick="window.location.href='profile-page.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3A4E3A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label" style="background:#2A362A;color:#02BA26;">🌙 Dark — #222C22</div>
+  </div>
+
+  <!-- ===== LIGHT PHONE ===== -->
+  <div class="phone-wrap">
+    <div class="phone light">
+      <div class="phone-scroll">
+
+        <div class="status-bar">
+          <span style="font-size:9px;color:#9AB09A;">9:41</span>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <div style="width:14px;height:6px;background:#02BA26;border-radius:2px;"></div>
+            <div style="width:6px;height:6px;background:#ccc;border-radius:50%;"></div>
+          </div>
+        </div>
+
+        <div class="header">
+          <div>
+            <div style="font-size:10px;color:#9AB09A;letter-spacing:0.5px;">GOOD AFTERNOON</div>
+            <div class="text-primary" style="font-size:20px;font-weight:900;letter-spacing:-0.5px;">Ahmed 👋</div>
+            <div style="font-size:10px;color:#02BA26;margin-top:2px;">UDST · Student</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="surface" style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.08);position:relative;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9AB09A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <div style="position:absolute;top:4px;right:4px;width:7px;height:7px;background:#FF7A00;border-radius:50%;border:2px solid #EFF3EE;"></div>
+            </div>
+            <div style="width:34px;height:34px;background:#02BA26;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;">A</div>
+          </div>
+        </div>
+
+        <div class="search-bar surface">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span style="color:#bbb;font-size:11px;">Search restaurants or dishes...</span>
+        </div>
+
+        <div class="wallet-card">
+          <div style="position:absolute;top:-15px;right:-15px;width:90px;height:90px;background:rgba(255,255,255,0.1);border-radius:50%;"></div>
+          <div style="position:absolute;bottom:-25px;right:25px;width:65px;height:65px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.55);letter-spacing:1px;margin-bottom:2px;">UNI EATS WALLET</div>
+          <div style="font-size:26px;font-weight:900;color:#fff;letter-spacing:-1px;">QAR 47.50</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <div style="font-size:9px;color:rgba(255,255,255,0.4);">●●●● 4821</div>
+            <div style="background:rgba(255,255,255,0.22);border-radius:20px;padding:5px 14px;display:flex;align-items:center;gap:5px;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span style="font-size:9px;color:#fff;font-weight:700;">TOP UP</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip chip-active">All</div>
+          <div class="chip chip-inactive">☕ Coffee</div>
+          <div class="chip chip-inactive">🍔 Food</div>
+          <div class="chip chip-inactive">🥗 Healthy</div>
+          <div class="chip chip-inactive">🍰 Dessert</div>
+          <div class="chip chip-inactive">🥤 Drinks</div>
+        </div>
+
+        <div class="section-header">
+          <span class="section-title text-primary">⚡ Flash Sale</span>
+          <span class="section-link" style="font-weight:700;">Ends 01:24:33</span>
+        </div>
+        <div class="flash-banner">
+          <div style="position:absolute;right:-10px;top:-10px;width:100px;height:100px;background:rgba(255,255,255,0.1);border-radius:50%;"></div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.65);margin-bottom:3px;letter-spacing:0.5px;">TODAY ONLY</div>
+            <div style="font-size:17px;font-weight:900;color:#fff;line-height:1.1;">30% OFF<br>Tim Hortons</div>
+            <div style="margin-top:8px;background:rgba(255,255,255,0.2);border-radius:20px;padding:5px 12px;display:inline-block;">
+              <span style="font-size:9px;color:#fff;font-weight:700;">ORDER NOW →</span>
+            </div>
+          </div>
+          <div style="width:64px;height:64px;background:rgba(255,255,255,0.14);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:28px;">☕</div>
+        </div>
+
+        <div class="section-header">
+          <span class="section-title text-primary">🔥 Trending Now</span>
+          <span class="section-link">See all</span>
+        </div>
+        <div class="h-scroll">
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);">
+              <div class="open-badge">OPEN</div>
+              <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.35);border-radius:6px;padding:3px 6px;font-size:8px;color:#FF7A00;font-weight:700;">#1 TODAY</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Tim Hortons</div>
+              <div class="rest-meta text-secondary">⭐ 4.8 · Building 3</div>
+              <div style="margin-top:5px;display:flex;align-items:center;gap:4px;">
+                <span style="font-size:9px;color:#FF7A00;text-decoration:line-through;">QAR 15</span>
+                <span style="font-size:10px;color:#02BA26;font-weight:800;">QAR 10.50</span>
+              </div>
+            </div>
+          </div>
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#2d4a1e,#1a3010);">
+              <div class="open-badge">OPEN</div>
+              <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.35);border-radius:6px;padding:3px 6px;font-size:8px;color:#02BA26;font-weight:700;">TRENDING</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Oakberry</div>
+              <div class="rest-meta text-secondary">⭐ 4.9 · Building 3</div>
+              <div style="margin-top:5px;font-size:10px;color:#02BA26;font-weight:800;">from QAR 18</div>
+            </div>
+          </div>
+          <div class="trend-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="trend-card-img" style="background:linear-gradient(135deg,#1a2a3a,#0d1a28);">
+              <div class="open-badge">OPEN</div>
+            </div>
+            <div class="rest-card-body">
+              <div class="rest-name text-primary">Edge Cafe</div>
+              <div class="rest-meta text-secondary">⭐ 4.6 · Building 9</div>
+              <div style="margin-top:5px;font-size:10px;color:#02BA26;font-weight:800;">from QAR 12</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <span class="section-title text-primary">⭐ Top Rated</span>
+          <span class="section-link">See all</span>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#2d4a1e,#1a3010);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Oakberry</div>
+            <div class="rest-meta text-secondary">Açaí & Healthy · B3</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:4px;">
+              <span style="font-size:10px;color:#FFB800;">★★★★★</span>
+              <span style="font-size:9px;color:#9AB09A;">4.9 (312)</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">5 min</div>
+            <div style="font-size:8px;color:#9AB09A;">delivery</div>
+          </div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);"></div>
+          <div style="flex:1;min-width:0;">
+            <div class="rest-name text-primary">Tim Hortons B20</div>
+            <div class="rest-meta text-secondary">Coffee & Bakery · B20</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:4px;">
+              <span style="font-size:10px;color:#FFB800;">★★★★★</span>
+              <span style="font-size:9px;color:#9AB09A;">4.8 (289)</span>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:9px;color:#02BA26;font-weight:700;">12 min</div>
+            <div style="font-size:8px;color:#9AB09A;">delivery</div>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-top:4px;">
+          <span class="section-title text-primary">📍 Near Me</span>
+          <span class="section-link">Open map</span>
+        </div>
+        <div class="map-preview">
+          <svg width="100%" height="110" viewBox="0 0 288 110" xmlns="http://www.w3.org/2000/svg">
+            <rect width="288" height="110" class="map-bg"/>
+            <rect x="20" y="10" width="55" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="47" y="33" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B3</text>
+            <rect x="90" y="10" width="40" height="30" rx="4" class="map-building" stroke-width="1"/>
+            <text x="110" y="28" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B5</text>
+            <rect x="145" y="10" width="40" height="30" rx="4" class="map-building" stroke-width="1"/>
+            <text x="165" y="28" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B9</text>
+            <rect x="200" y="10" width="60" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="230" y="33" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B12</text>
+            <rect x="20" y="65" width="50" height="35" rx="4" class="map-building" stroke-width="1"/>
+            <text x="45" y="86" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B13</text>
+            <rect x="90" y="60" width="55" height="40" rx="4" class="map-building" stroke-width="1"/>
+            <text x="117" y="83" text-anchor="middle" class="map-label" font-size="8" font-family="sans-serif">B20</text>
+            <circle cx="47" cy="25" r="7" fill="#02BA26" opacity="0.9"/>
+            <text x="47" y="28.5" text-anchor="middle" fill="#fff" font-size="9">🍽</text>
+            <circle cx="47" cy="25" r="13" fill="none" stroke="#02BA26" stroke-width="1" opacity="0.3"/>
+            <circle cx="165" cy="20" r="7" fill="#FF7A00" opacity="0.9"/>
+            <text x="165" y="23.5" text-anchor="middle" fill="#fff" font-size="9">☕</text>
+            <circle cx="117" cy="75" r="7" fill="#02BA26" opacity="0.9"/>
+            <text x="117" y="78.5" text-anchor="middle" fill="#fff" font-size="9">🍽</text>
+            <circle cx="90" cy="50" r="7" fill="#fff"/>
+            <circle cx="90" cy="50" r="4" fill="#106C2F"/>
+            <circle cx="90" cy="50" r="12" fill="none" stroke="#02BA26" stroke-width="1.5" opacity="0.5"/>
+          </svg>
+          <div class="map-overlay" style="position:absolute;bottom:8px;right:8px;border-radius:8px;padding:4px 8px;font-size:8px;font-weight:700;">3 places within 10 min</div>
+        </div>
+
+        <div class="h-scroll" style="margin-top:-6px;">
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#4a1a0a,#8B4513);"><div class="open-badge">2 MIN</div></div>
+            <div class="rest-card-body"><div class="rest-name text-primary" style="font-size:10px;">Caribou Coffee</div><div class="rest-meta text-secondary">E4 Courtyard</div></div>
+          </div>
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#0a2a1a,#1a4a2a);"><div class="open-badge">5 MIN</div></div>
+            <div class="rest-card-body"><div class="rest-name text-primary" style="font-size:10px;">JamKai</div><div class="rest-meta text-secondary">Building 3</div></div>
+          </div>
+          <div class="rest-card rest-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;">
+            <div class="rest-card-img" style="background:linear-gradient(135deg,#1a1a3a,#0d0d28);"><div class="open-badge">8 MIN</div></div>
+            <div class="rest-card-body"><div class="rest-name text-primary" style="font-size:10px;">Bold Café</div><div class="rest-meta text-secondary">Atrium 5</div></div>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-top:6px;">
+          <span class="section-title text-primary">🏪 All Restaurants</span>
+          <span class="section-link">16 places</span>
+        </div>
+        <div class="filter-bar">
+          <div class="filter-chip filter-chip-active">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-right:3px;vertical-align:middle;"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Nearest
+          </div>
+          <div class="filter-chip">Open Now</div>
+          <div class="filter-chip">Rating 4+</div>
+          <div class="filter-chip">Under 10 min</div>
+          <div class="filter-chip">Pickup Only</div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#8B4513,#5c2d0a);"></div>
+          <div style="flex:1;min-width:0;"><div class="rest-name text-primary">Tim Hortons</div><div class="rest-meta text-secondary">Coffee & Bakery · ⭐ 4.8</div><div style="display:flex;gap:4px;margin-top:4px;"><span class="badge-pill">Delivery</span><span class="badge-pill">Pickup</span></div></div>
+          <div style="text-align:right;flex-shrink:0;"><div style="font-size:9px;color:#02BA26;font-weight:700;">8 min</div><div style="font-size:8px;color:#9AB09A;">B3</div><div style="font-size:8px;color:#FF7A00;font-weight:700;">30% OFF</div></div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#1a2a3a,#0d1a28);"></div>
+          <div style="flex:1;min-width:0;"><div class="rest-name text-primary">Edge Cafe</div><div class="rest-meta text-secondary">Café · ⭐ 4.6</div><div style="display:flex;gap:4px;margin-top:4px;"><span class="badge-pill">Delivery</span><span class="badge-pill">Pickup</span></div></div>
+          <div style="text-align:right;flex-shrink:0;"><div style="font-size:9px;color:#02BA26;font-weight:700;">15 min</div><div style="font-size:8px;color:#9AB09A;">B9</div></div>
+        </div>
+        <div class="list-card" onclick="window.location.href=\'/files/restaurant-detail.html\'" style="cursor:pointer;" style="margin-bottom:8px;">
+          <div class="list-thumb" style="background:linear-gradient(135deg,#3a2a0a,#6a4a10);"></div>
+          <div style="flex:1;min-width:0;"><div class="rest-name text-primary">Ennabi 92</div><div class="rest-meta text-secondary">Qatari Cuisine · ⭐ 4.7</div><div style="display:flex;gap:4px;margin-top:4px;"><span class="badge-pill">Pickup</span></div></div>
+          <div style="text-align:right;flex-shrink:0;"><div style="font-size:8px;color:#9AB09A;">Courtyard B4</div></div>
+        </div>
+        <div style="height:16px;"></div>
+      </div>
+
+      <!-- Pill nav with icons -->
+      <div class="pill-nav">
+        <div class="nav-item">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#02BA26" stroke="none"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+          <div class="nav-dot"></div>
+        </div>
+        <div class="nav-item" onclick="window.location.href='order-tracking.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C0D0C0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+        </div>
+        <div style="position:relative;">
+          <div class="nav-cart-btn" onclick="window.location.href='restaurant-detail.html'" style="cursor:pointer;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          </div>
+          <div class="cart-badge">2</div>
+        </div>
+        <div class="nav-item" onclick="window.location.href='orders-page.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C0D0C0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div class="nav-item" onclick="window.location.href='profile-page.html'" style="cursor:pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C0D0C0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label" style="background:#E6EDE5;color:#106C2F;">☀️ Light — #EFF3EE</div>
+  </div>
+
+</div>
+<p style="color:#666;font-size:12px;text-align:center;margin-top:16px;">Scroll inside each phone · Nav icons: Home · Map · Cart (bubble) · Orders · Profile</p>
+</body>
+</html>

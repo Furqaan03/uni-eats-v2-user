@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uni Eats — Wallet</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  h2 { color: #fff; font-size: 18px; text-align: center; margin-bottom: 2px; }
+  .subtitle { color: #888; font-size: 13px; text-align: center; margin-bottom: 10px; }
+  .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 8px; }
+  .ctrl-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #aaa; border-radius: 20px; padding: 6px 16px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+  .ctrl-btn.active { background: #02BA26; border-color: #02BA26; color: #fff; font-weight: 700; }
+
+  .phone { width: 320px; border-radius: 40px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.5); display: flex; flex-direction: column; height: 680px; }
+  .phone-body { flex: 1; overflow-y: auto; scrollbar-width: none; min-height: 0; padding-bottom: 8px; }
+  .phone-body::-webkit-scrollbar { display: none; }
+
+  /* DARK */
+  .dark { background: #222C22; }
+  .dark .surface { background: #2A362A; }
+  .dark .text-primary { color: #EFF4EF; }
+  .dark .text-secondary { color: #8AA08A; }
+  .dark .text-muted { color: #506050; }
+  .dark .pill-nav { background: #2A362A; box-shadow: 0 8px 32px rgba(2,186,38,0.18); }
+  .dark .row-card { background: #2A362A; }
+  .dark .sep { background: rgba(255,255,255,0.05); }
+  .dark .txn-icon-bg { background: #303E30; }
+  .dark .section-lbl-clr { color: #506050; }
+  .dark .topup-chip { background: #2A362A; color: #8AA08A; border: 1px solid #3A4E3A; }
+  .dark .topup-chip.active-chip { background: rgba(2,186,38,0.15); color: #02BA26; border-color: #02BA26; }
+  .dark .bar-bg { background: #303E30; }
+  .dark .tab-bar { background: #2A362A; }
+  .dark .tab-btn { color: #506050; }
+  .dark .tab-btn.active { color: #02BA26; }
+  .dark .tab-indicator { background: #02BA26; }
+  .dark .heat-cell-0 { background: #2A362A; }
+  .dark .heat-cell-1 { background: rgba(2,186,38,0.15); }
+  .dark .heat-cell-2 { background: rgba(2,186,38,0.35); }
+  .dark .heat-cell-3 { background: rgba(2,186,38,0.6); }
+  .dark .heat-cell-4 { background: #02BA26; }
+  .dark .budget-bg { background: #303E30; }
+  .dark .stmt-row { background: #2A362A; }
+  .dark .insight-card { background: #2A362A; }
+  .dark .topup-sheet { background: #2A362A; }
+  .dark .topup-input-row { background: #303E30; }
+  .dark .topup-input { color: #EFF4EF; }
+
+  /* LIGHT */
+  .light { background: #EFF3EE; }
+  .light .surface { background: #fff; }
+  .light .text-primary { color: #0D1F0D; }
+  .light .text-secondary { color: #5A7A5A; }
+  .light .text-muted { color: #9AB09A; }
+  .light .pill-nav { background: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .light .row-card { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .light .sep { background: rgba(0,0,0,0.05); }
+  .light .txn-icon-bg { background: #F0F5F0; }
+  .light .section-lbl-clr { color: #9AB09A; }
+  .light .topup-chip { background: #fff; color: #5A7A5A; border: 1px solid #D8E8D8; }
+  .light .topup-chip.active-chip { background: rgba(2,186,38,0.08); color: #02BA26; border-color: #02BA26; }
+  .light .bar-bg { background: #E0EBE0; }
+  .light .tab-bar { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .light .tab-btn { color: #9AB09A; }
+  .light .tab-btn.active { color: #02BA26; }
+  .light .tab-indicator { background: #02BA26; }
+  .light .heat-cell-0 { background: #E8F0E8; }
+  .light .heat-cell-1 { background: rgba(2,186,38,0.15); }
+  .light .heat-cell-2 { background: rgba(2,186,38,0.35); }
+  .light .heat-cell-3 { background: rgba(2,186,38,0.6); }
+  .light .heat-cell-4 { background: #02BA26; }
+  .light .budget-bg { background: #E0EBE0; }
+  .light .stmt-row { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .light .insight-card { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .light .topup-sheet { background: #fff; }
+  .light .topup-input-row { background: #F0F5F0; }
+  .light .topup-input { color: #0D1F0D; }
+
+  .status-bar { padding: 10px 20px 0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+
+  /* Credit card */
+  .card-scene { margin: 10px 16px 10px; perspective: 1000px; }
+  .card { width: 100%; height: 155px; border-radius: 20px; position: relative; overflow: hidden; cursor: pointer;
+    background: linear-gradient(135deg, #02BA26 0%, #0a6b1e 40%, #106C2F 70%, #052e11 100%);
+    box-shadow: 0 14px 44px rgba(2,186,38,0.32), 0 4px 16px rgba(0,0,0,0.3);
+    transition: transform 0.15s;
+  }
+  .card:hover { transform: translateY(-2px) scale(1.01); }
+  @keyframes shimmer { 0%,100%{opacity:0.06;} 50%{opacity:0.15;} }
+  .card-sheen { position:absolute;inset:0;border-radius:20px;background:linear-gradient(125deg,transparent 20%,rgba(255,255,255,0.07) 40%,transparent 60%);animation:shimmer 3s ease-in-out infinite;pointer-events:none; }
+  .card-pattern { position:absolute;right:-20px;top:-20px;width:200px;height:200px;opacity:0.07;background-image:repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 0,transparent 50%);background-size:14px 14px; }
+  .card-glow { position:absolute;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.06);top:-50px;right:-40px; }
+  .card-glow2 { position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.04);bottom:-40px;left:-20px; }
+  .card-top { position:absolute;top:14px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:center; }
+  .chip { width:30px;height:22px;border-radius:4px;background:linear-gradient(135deg,#e8c84a,#c9a82a);position:relative; }
+  .chip::before { content:'';position:absolute;width:100%;height:1px;background:rgba(0,0,0,0.2);top:50%; }
+  .chip::after { content:'';position:absolute;height:100%;width:1px;background:rgba(0,0,0,0.2);left:50%; }
+  .card-number { position:absolute;bottom:40px;left:18px;letter-spacing:3px;font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;font-family:'Courier New',monospace; }
+  .card-bottom { position:absolute;bottom:12px;left:18px;right:18px;display:flex;justify-content:space-between;align-items:flex-end; }
+
+  /* Quick actions */
+  .quick-actions { margin:0 16px 12px;display:flex;gap:8px; }
+  .quick-btn { flex:1;border-radius:12px;padding:9px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:opacity 0.15s; }
+  .quick-btn:hover { opacity:0.8; }
+  .quick-icon { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center; }
+
+  /* Analytics tab bar */
+  .tab-bar { margin:0 16px 12px;border-radius:14px;padding:4px;display:flex;position:relative; }
+  .tab-btn { flex:1;padding:8px 4px;text-align:center;font-size:10px;font-weight:700;cursor:pointer;border-radius:10px;transition:color 0.2s;position:relative;z-index:1; }
+  .tab-pill { position:absolute;top:4px;bottom:4px;border-radius:10px;background:#02BA26;transition:left 0.25s cubic-bezier(.4,0,.2,1),width 0.25s;z-index:0; }
+
+  /* Top-up chips */
+  .topup-chips { margin:0 16px 10px;display:flex;gap:6px;flex-wrap:wrap; }
+  .topup-chip { border-radius:20px;padding:5px 12px;font-size:10px;font-weight:700;cursor:pointer;transition:all 0.2s; }
+
+  /* Bar chart */
+  .bar-chart-wrap { display:flex;gap:5px;align-items:flex-end;height:48px; }
+  .bar-col { flex:1;display:flex;flex-direction:column;align-items:center;gap:3px; }
+  .bar-bg { border-radius:4px;flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end; }
+  .bar-fill { border-radius:4px;width:100%;transition:height 0.4s; }
+  .bar-label { font-size:7px; }
+
+  /* Donut chart (CSS conic-gradient) */
+  .donut { width:90px;height:90px;border-radius:50%;position:relative;flex-shrink:0; }
+  .donut-hole { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%; }
+
+  /* Budget tracker */
+  .budget-bar-bg { border-radius:99px;height:8px;overflow:hidden; }
+  .budget-bar-fill { height:100%;border-radius:99px;background:linear-gradient(90deg,#02BA26,#FF7A00); }
+
+  /* Heatmap */
+  .heat-grid { display:grid;grid-template-columns:repeat(7,1fr);gap:4px; }
+  .heat-cell { border-radius:4px;aspect-ratio:1;cursor:pointer;transition:transform 0.15s; }
+  .heat-cell:hover { transform:scale(1.15); }
+  .heat-day-labels { display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:3px; }
+  .heat-day-lbl { font-size:7px;text-align:center; }
+
+  /* Top restaurants */
+  .rest-rank-row { display:flex;align-items:center;gap:10px;padding:8px 14px; }
+  .rank-num { width:20px;font-size:11px;font-weight:900;text-align:center;flex-shrink:0; }
+  .rank-bar-wrap { flex:1; }
+  .rank-bar-bg { height:5px;border-radius:99px;overflow:hidden;margin-top:3px; }
+  .rank-bar-fill { height:100%;border-radius:99px; }
+
+  /* Insights cards */
+  .insight-row { display:flex;gap:8px;margin:0 16px 10px; }
+  .insight-card { border-radius:12px;padding:10px 12px;flex:1; }
+
+  /* Statement rows */
+  .stmt-row { margin:0 16px 6px;border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer; }
+
+  /* Transactions */
+  .txn-list { margin:0 16px 10px;border-radius:14px;overflow:hidden; }
+  .txn-row { display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer; }
+  .txn-sep { height:1px;margin:0 14px; }
+  .txn-icon { width:34px;height:34px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px; }
+  .txn-info { flex:1;min-width:0; }
+  .txn-amount { text-align:right;flex-shrink:0; }
+
+  /* Top-up modal */
+  .topup-modal { position:absolute;inset:0;background:rgba(0,0,0,0.6);border-radius:40px;display:flex;align-items:flex-end;z-index:100; }
+  .topup-sheet { width:100%;border-radius:24px 24px 40px 40px;padding:18px 18px 28px; }
+  .topup-input-row { display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 14px;margin:10px 0; }
+  .topup-input { background:none;border:none;outline:none;font-size:18px;font-weight:800;flex:1;width:100%; }
+
+  /* Section label */
+  .section-lbl { padding:4px 20px 6px;font-size:10px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase; }
+
+  /* Pill nav */
+  .pill-nav-wrap { padding:6px 16px 14px;flex-shrink:0; }
+  .pill-nav { border-radius:50px;padding:8px 16px;display:flex;justify-content:space-between;align-items:center; }
+  .nav-item { display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 6px; }
+  .nav-dot { width:4px;height:4px;border-radius:50%;background:#02BA26; }
+  .nav-cart-btn { width:42px;height:42px;background:#02BA26;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(2,186,38,0.4);position:relative; }
+  .cart-badge { position:absolute;top:-3px;right:-3px;background:#FF7A00;width:14px;height:14px;border-radius:50%;font-size:8px;color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center; }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  .tab-view { animation:fadeIn 0.2s ease; }
+
+  .toast { position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#02BA26;color:#fff;padding:8px 20px;border-radius:20px;font-size:11px;font-weight:700;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none; }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<h2>Wallet</h2>
+<p class="subtitle">Credit card · Analytics tabs · Budget tracker · Spending heatmap</p>
+<div class="controls">
+  <button class="ctrl-btn active" id="mDark" onclick="setMode('dark')">🌙 Dark</button>
+  <button class="ctrl-btn" id="mLight" onclick="setMode('light')">☀️ Light</button>
+</div>
+
+<div style="display:flex;flex-direction:column;align-items:center;">
+<div class="phone dark" id="phone" style="position:relative;">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span style="font-size:10px;color:#8AA08A;font-weight:600;">9:41</span>
+    <div style="display:flex;gap:5px;align-items:center;">
+      <svg width="14" height="10" viewBox="0 0 14 10"><rect x="0" y="3" width="3" height="7" rx="0.5" fill="#8AA08A"/><rect x="4" y="2" width="3" height="8" rx="0.5" fill="#8AA08A"/><rect x="8" y="0" width="3" height="10" rx="0.5" fill="#02BA26"/></svg>
+      <svg width="22" height="10" viewBox="0 0 22 10"><rect x="0" y="1" width="18" height="8" rx="2" stroke="#8AA08A" stroke-width="1" fill="none"/><rect x="1.5" y="2.5" width="13" height="5" rx="1" fill="#02BA26"/><rect x="19" y="3.5" width="2" height="3" rx="1" fill="#8AA08A"/></svg>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div style="padding:8px 20px 2px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div onclick="window.location.href='profile-page.html'" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;" class="surface">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#8AA08A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="text-primary" style="font-size:18px;font-weight:900;letter-spacing:-0.5px;">My Wallet</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <div id="freezeIndicator" style="display:none;font-size:9px;font-weight:700;color:#FF7A00;background:rgba(255,122,0,0.12);border-radius:20px;padding:3px 8px;">🔒 FROZEN</div>
+    </div>
+  </div>
+
+  <div class="phone-body">
+
+    <!-- CREDIT CARD -->
+    <div class="card-scene">
+      <div class="card" id="walletCard">
+        <div class="card-pattern"></div>
+        <div class="card-glow"></div>
+        <div class="card-glow2"></div>
+        <div class="card-sheen"></div>
+        <div class="card-top">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <div style="width:22px;height:22px;background:rgba(255,255,255,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="21" r="1" stroke="#fff" stroke-width="2"/><circle cx="20" cy="21" r="1" stroke="#fff" stroke-width="2"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <span style="font-size:10px;font-weight:800;color:#fff;letter-spacing:0.5px;">UNI EATS</span>
+          </div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" opacity="0.7">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="12" cy="20" r="1" fill="#fff"/>
+          </svg>
+        </div>
+        <div style="position:absolute;top:48px;left:18px;"><div class="chip"></div></div>
+        <div style="position:absolute;top:44px;left:64px;">
+          <div style="font-size:8px;color:rgba(255,255,255,0.5);letter-spacing:0.8px;margin-bottom:2px;">BALANCE</div>
+          <div style="font-size:19px;font-weight:900;color:#fff;letter-spacing:-0.5px;" id="cardBalance">QAR 47.50</div>
+        </div>
+        <div class="card-number">●●●● &nbsp;●●●● &nbsp;●●●● &nbsp;4821</div>
+        <div class="card-bottom">
+          <div>
+            <div style="font-size:6px;color:rgba(255,255,255,0.4);letter-spacing:0.8px;margin-bottom:2px;">CARD HOLDER</div>
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:0.5px;">AHMED HASSAN</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:6px;color:rgba(255,255,255,0.4);letter-spacing:0.8px;margin-bottom:2px;">VALID THRU</div>
+            <div style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.85);">12/27</div>
+          </div>
+        </div>
+        <div id="frozenOverlay" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.55);border-radius:20px;align-items:center;justify-content:center;flex-direction:column;gap:6px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#fff" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+          <span style="font-size:10px;font-weight:700;color:#fff;">Card Frozen</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="quick-actions">
+      <div class="quick-btn surface" onclick="openTopup()">
+        <div class="quick-icon" style="background:rgba(2,186,38,0.15);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </div>
+        <div class="text-primary" style="font-size:9px;font-weight:700;">Top Up</div>
+      </div>
+      <div class="quick-btn surface" onclick="showToast('Transfer feature coming soon')">
+        <div class="quick-icon" style="background:rgba(255,122,0,0.12);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="#FF7A00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="text-primary" style="font-size:9px;font-weight:700;">Transfer</div>
+      </div>
+      <div class="quick-btn surface" onclick="switchTab('txns')">
+        <div class="quick-icon" style="background:rgba(2,186,38,0.15);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#02BA26" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="#02BA26" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="text-primary" style="font-size:9px;font-weight:700;">Statements</div>
+      </div>
+      <div class="quick-btn surface" id="freezeBtn" onclick="toggleFreeze()">
+        <div class="quick-icon" style="background:rgba(255,122,0,0.12);" id="freezeIcon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="#FF7A00" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#FF7A00" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div id="freezeLabel" class="text-primary" style="font-size:9px;font-weight:700;">Freeze</div>
+      </div>
+    </div>
+
+    <!-- QPay button -->
+    <div onclick="openTopup()" style="margin:0 16px 12px;border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;background:linear-gradient(135deg,#8B0000,#c0392b);">
+      <div style="width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="#fff" stroke-width="2"/><path d="M2 10h20" stroke="#fff" stroke-width="2"/><circle cx="6" cy="15" r="1" fill="#fff"/><circle cx="10" cy="15" r="1" fill="#fff"/></svg>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:11px;font-weight:800;color:#fff;">Pay via QPay</div>
+        <div style="font-size:9px;color:rgba(255,255,255,0.65);margin-top:1px;">Top up instantly · Qatar bank cards</div>
+      </div>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Analytics Tab Bar -->
+    <div class="tab-bar" id="tabBar">
+      <div class="tab-pill" id="tabPill" style="left:4px;width:calc(33.33% - 3px);"></div>
+      <div class="tab-btn active" id="tab-overview" onclick="switchTab('overview')">Overview</div>
+      <div class="tab-btn" id="tab-insights" onclick="switchTab('insights')">Insights</div>
+      <div class="tab-btn" id="tab-txns" onclick="switchTab('txns')">Transactions</div>
+    </div>
+
+    <!-- ═══ OVERVIEW TAB ═══ -->
+    <div id="view-overview" class="tab-view">
+
+      <!-- Month selector + totals -->
+      <div style="margin:0 16px 10px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div onclick="showToast('Previous month')" style="width:22px;height:22px;border-radius:50%;background:rgba(2,186,38,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="text-primary" style="font-size:12px;font-weight:800;">June 2026</div>
+          <div style="width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,0.1);display:flex;align-items:center;justify-content:center;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="#506050" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:16px;font-weight:900;color:#02BA26;">QAR 124.50</div>
+          <div style="font-size:8px;color:#8AA08A;">↓ 12% vs May</div>
+        </div>
+      </div>
+
+      <!-- Bar chart -->
+      <div class="row-card" style="margin:0 16px 10px;border-radius:14px;padding:12px 14px;">
+        <div class="text-secondary" style="font-size:9px;font-weight:700;margin-bottom:8px;">6-MONTH SPEND (QAR)</div>
+        <div class="bar-chart-wrap">
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:45%;background:#02BA26;"></div></div><div class="bar-label text-muted">Jan</div></div>
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:60%;background:#02BA26;"></div></div><div class="bar-label text-muted">Feb</div></div>
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:80%;background:#02BA26;"></div></div><div class="bar-label text-muted">Mar</div></div>
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:55%;background:#02BA26;"></div></div><div class="bar-label text-muted">Apr</div></div>
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:100%;background:#02BA26;"></div></div><div class="bar-label text-muted">May</div></div>
+          <div class="bar-col"><div class="bar-bg"><div class="bar-fill" style="height:70%;background:rgba(2,186,38,0.45);"></div></div><div class="bar-label" style="color:#02BA26;font-weight:700;">Jun</div></div>
+        </div>
+      </div>
+
+      <!-- Category donut + breakdown -->
+      <div class="row-card" style="margin:0 16px 10px;border-radius:14px;padding:12px 14px;">
+        <div class="text-secondary" style="font-size:9px;font-weight:700;margin-bottom:10px;">SPENDING BREAKDOWN</div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="donut" style="background:conic-gradient(#FF7A00 0% 48%, #02BA26 48% 86.4%, #106C2F 86.4% 100%);">
+            <div class="donut-hole surface" style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <div class="text-primary" style="font-size:11px;font-weight:900;">QAR</div>
+              <div class="text-primary" style="font-size:13px;font-weight:900;">124</div>
+            </div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:2px;background:#FF7A00;"></div><span class="text-secondary" style="font-size:9px;">Food</span></div>
+              <div style="text-align:right;"><span class="text-primary" style="font-size:10px;font-weight:700;">QAR 60</span><span class="text-muted" style="font-size:8px;margin-left:4px;">48%</span></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:2px;background:#02BA26;"></div><span class="text-secondary" style="font-size:9px;">Coffee</span></div>
+              <div style="text-align:right;"><span class="text-primary" style="font-size:10px;font-weight:700;">QAR 48</span><span class="text-muted" style="font-size:8px;margin-left:4px;">38%</span></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:5px;"><div style="width:8px;height:8px;border-radius:2px;background:#106C2F;"></div><span class="text-secondary" style="font-size:9px;">Healthy</span></div>
+              <div style="text-align:right;"><span class="text-primary" style="font-size:10px;font-weight:700;">QAR 16.50</span><span class="text-muted" style="font-size:8px;margin-left:4px;">14%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Budget tracker -->
+      <div class="row-card" style="margin:0 16px 10px;border-radius:14px;padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <div class="text-secondary" style="font-size:9px;font-weight:700;">MONTHLY BUDGET</div>
+            <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px;">
+              <span class="text-primary" style="font-size:15px;font-weight:900;">QAR 124.50</span>
+              <span class="text-muted" style="font-size:9px;">/ 200</span>
+            </div>
+          </div>
+          <div onclick="showToast('Edit budget')" style="font-size:9px;font-weight:700;color:#02BA26;cursor:pointer;border:1px solid rgba(2,186,38,0.3);border-radius:8px;padding:4px 8px;">Edit</div>
+        </div>
+        <div class="budget-bar-bg budget-bg">
+          <div class="budget-bar-fill" style="width:62.25%;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;">
+          <div style="font-size:8px;color:#02BA26;font-weight:700;">62% used</div>
+          <div style="font-size:8px;color:#8AA08A;">QAR 75.50 remaining</div>
+        </div>
+        <div style="margin-top:8px;background:rgba(2,186,38,0.08);border-radius:8px;padding:6px 10px;font-size:9px;color:#02BA26;">
+          ✓ On track — you're spending less than last June
+        </div>
+      </div>
+
+      <!-- Top-up chips -->
+      <div class="section-lbl section-lbl-clr">Quick Top-up</div>
+      <div class="topup-chips">
+        <div class="topup-chip" onclick="selectChip(this,20)">QAR 20</div>
+        <div class="topup-chip active-chip" onclick="selectChip(this,50)">QAR 50</div>
+        <div class="topup-chip" onclick="selectChip(this,100)">QAR 100</div>
+        <div class="topup-chip" onclick="selectChip(this,200)">QAR 200</div>
+        <div class="topup-chip" onclick="openTopup()">Custom</div>
+      </div>
+      <div style="height:4px;"></div>
+    </div>
+
+    <!-- ═══ INSIGHTS TAB ═══ -->
+    <div id="view-insights" class="tab-view" style="display:none;">
+
+      <!-- Key insight cards -->
+      <div class="insight-row">
+        <div class="insight-card">
+          <div style="font-size:18px;margin-bottom:4px;">☕</div>
+          <div class="text-primary" style="font-size:12px;font-weight:900;">Tim Hortons</div>
+          <div class="text-muted" style="font-size:8px;margin-top:1px;">Most visited · 9 orders</div>
+        </div>
+        <div class="insight-card">
+          <div style="font-size:18px;margin-bottom:4px;">🕐</div>
+          <div class="text-primary" style="font-size:12px;font-weight:900;">12 – 1 PM</div>
+          <div class="text-muted" style="font-size:8px;margin-top:1px;">Peak order time</div>
+        </div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-card">
+          <div style="font-size:18px;margin-bottom:4px;">📦</div>
+          <div class="text-primary" style="font-size:12px;font-weight:900;">14 orders</div>
+          <div class="text-muted" style="font-size:8px;margin-top:1px;">This month total</div>
+        </div>
+        <div class="insight-card">
+          <div style="font-size:18px;margin-bottom:4px;">💰</div>
+          <div class="text-primary" style="font-size:12px;font-weight:900;">QAR 8.89</div>
+          <div class="text-muted" style="font-size:8px;margin-top:1px;">Avg per order</div>
+        </div>
+      </div>
+
+      <!-- Spending heatmap (day-of-week × 4 weeks) -->
+      <div class="row-card" style="margin:0 16px 10px;border-radius:14px;padding:12px 14px;">
+        <div class="text-secondary" style="font-size:9px;font-weight:700;margin-bottom:8px;">ACTIVITY HEATMAP — JUNE</div>
+        <div class="heat-day-labels text-muted">
+          <div class="heat-day-lbl">M</div><div class="heat-day-lbl">T</div><div class="heat-day-lbl">W</div>
+          <div class="heat-day-lbl">T</div><div class="heat-day-lbl">F</div><div class="heat-day-lbl">S</div><div class="heat-day-lbl">S</div>
+        </div>
+        <!-- Week 1 -->
+        <div class="heat-grid" style="margin-bottom:4px;">
+          <div class="heat-cell heat-cell-2" title="Mon Jun 2 · QAR 18"></div>
+          <div class="heat-cell heat-cell-1" title="Tue Jun 3 · QAR 9"></div>
+          <div class="heat-cell heat-cell-3" title="Wed Jun 4 · QAR 24"></div>
+          <div class="heat-cell heat-cell-0" title="Thu Jun 5 · QAR 0"></div>
+          <div class="heat-cell heat-cell-4" title="Fri Jun 6 · QAR 36"></div>
+          <div class="heat-cell heat-cell-1" title="Sat Jun 7 · QAR 8"></div>
+          <div class="heat-cell heat-cell-0" title="Sun Jun 8 · QAR 0"></div>
+        </div>
+        <!-- Week 2 -->
+        <div class="heat-grid" style="margin-bottom:4px;">
+          <div class="heat-cell heat-cell-1" title="Mon Jun 9 · QAR 10"></div>
+          <div class="heat-cell heat-cell-3" title="Tue Jun 10 · QAR 22"></div>
+          <div class="heat-cell heat-cell-2" title="Wed Jun 11 · QAR 16"></div>
+          <div class="heat-cell heat-cell-4" title="Thu Jun 12 · QAR 30"></div>
+          <div class="heat-cell heat-cell-3" title="Fri Jun 13 · QAR 32"></div>
+          <div class="heat-cell heat-cell-0" title="Sat Jun 14 · QAR 0"></div>
+          <div class="heat-cell heat-cell-0" title="Sun Jun 15 · QAR 0"></div>
+        </div>
+        <!-- Week 3 -->
+        <div class="heat-grid" style="margin-bottom:4px;">
+          <div class="heat-cell heat-cell-2" title="Mon Jun 16 · QAR 18"></div>
+          <div class="heat-cell heat-cell-1" title="Tue Jun 17 · QAR 9"></div>
+          <div class="heat-cell heat-cell-0" title="Wed Jun 18 · QAR 0"></div>
+          <div class="heat-cell heat-cell-2" title="Thu Jun 19 · QAR 14"></div>
+          <div class="heat-cell heat-cell-3" title="Fri Jun 20 · QAR 22"></div>
+          <div class="heat-cell heat-cell-1" title="Sat Jun 21 · QAR 6"></div>
+          <div class="heat-cell heat-cell-0" title="Sun Jun 22 · QAR 0"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span class="text-muted" style="font-size:8px;">Less</span>
+          <div style="display:flex;gap:3px;">
+            <div class="heat-cell-0" style="width:10px;height:10px;border-radius:2px;"></div>
+            <div class="heat-cell-1" style="width:10px;height:10px;border-radius:2px;background:rgba(2,186,38,0.15);"></div>
+            <div class="heat-cell-2" style="width:10px;height:10px;border-radius:2px;background:rgba(2,186,38,0.35);"></div>
+            <div class="heat-cell-3" style="width:10px;height:10px;border-radius:2px;background:rgba(2,186,38,0.6);"></div>
+            <div class="heat-cell-4" style="width:10px;height:10px;border-radius:2px;background:#02BA26;"></div>
+          </div>
+          <span class="text-muted" style="font-size:8px;">More</span>
+        </div>
+      </div>
+
+      <!-- Top restaurants ranked -->
+      <div class="row-card" style="margin:0 16px 10px;border-radius:14px;padding:12px 0 4px;">
+        <div class="text-secondary" style="font-size:9px;font-weight:700;padding:0 14px;margin-bottom:6px;">TOP RESTAURANTS THIS MONTH</div>
+        <div class="rest-rank-row">
+          <div class="rank-num" style="color:#FFB800;">🥇</div>
+          <div style="font-size:16px;">☕</div>
+          <div style="flex:1;min-width:0;">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Tim Hortons</div>
+            <div class="rank-bar-bg bar-bg"><div class="rank-bar-fill" style="width:100%;background:#02BA26;"></div></div>
+          </div>
+          <div style="text-align:right;"><div class="text-primary" style="font-size:10px;font-weight:700;">QAR 60</div><div class="text-muted" style="font-size:8px;">9 orders</div></div>
+        </div>
+        <div class="rest-rank-row">
+          <div class="rank-num" style="color:#8AA08A;">🥈</div>
+          <div style="font-size:16px;">🫐</div>
+          <div style="flex:1;min-width:0;">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Oakberry</div>
+            <div class="rank-bar-bg bar-bg"><div class="rank-bar-fill" style="width:64%;background:#02BA26;"></div></div>
+          </div>
+          <div style="text-align:right;"><div class="text-primary" style="font-size:10px;font-weight:700;">QAR 38</div><div class="text-muted" style="font-size:8px;">3 orders</div></div>
+        </div>
+        <div class="rest-rank-row" style="padding-bottom:12px;">
+          <div class="rank-num" style="color:#c47722;">🥉</div>
+          <div style="font-size:16px;">🍕</div>
+          <div style="flex:1;min-width:0;">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Edge Cafe</div>
+            <div class="rank-bar-bg bar-bg"><div class="rank-bar-fill" style="width:44%;background:#02BA26;"></div></div>
+          </div>
+          <div style="text-align:right;"><div class="text-primary" style="font-size:10px;font-weight:700;">QAR 26.50</div><div class="text-muted" style="font-size:8px;">2 orders</div></div>
+        </div>
+      </div>
+
+      <!-- Savings tip -->
+      <div style="margin:0 16px 10px;border-radius:12px;padding:10px 12px;background:linear-gradient(135deg,rgba(2,186,38,0.1),rgba(16,108,47,0.15));border:1px solid rgba(2,186,38,0.2);">
+        <div style="font-size:10px;font-weight:800;color:#02BA26;margin-bottom:4px;">💡 Spending Insight</div>
+        <div class="text-secondary" style="font-size:9px;line-height:1.4;">You spend 68% more on Fridays. Setting a Friday budget limit could save you ~QAR 15/month.</div>
+      </div>
+      <div style="height:4px;"></div>
+    </div>
+
+    <!-- ═══ TRANSACTIONS TAB ═══ -->
+    <div id="view-txns" class="tab-view" style="display:none;">
+
+      <!-- Monthly statements -->
+      <div class="section-lbl section-lbl-clr">Statements</div>
+      <div class="stmt-row" onclick="showToast('Downloading June 2026 statement…')">
+        <div style="width:32px;height:32px;border-radius:10px;background:rgba(2,186,38,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#02BA26" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#02BA26" stroke-width="2"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;"><div class="text-primary" style="font-size:11px;font-weight:700;">June 2026</div><div class="text-muted" style="font-size:9px;">14 transactions · QAR 124.50</div></div>
+        <div style="font-size:9px;font-weight:700;color:#02BA26;">PDF</div>
+      </div>
+      <div class="stmt-row" onclick="showToast('Downloading May 2026 statement…')">
+        <div style="width:32px;height:32px;border-radius:10px;background:rgba(2,186,38,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#02BA26" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#02BA26" stroke-width="2"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;"><div class="text-primary" style="font-size:11px;font-weight:700;">May 2026</div><div class="text-muted" style="font-size:9px;">18 transactions · QAR 142.00</div></div>
+        <div style="font-size:9px;font-weight:700;color:#02BA26;">PDF</div>
+      </div>
+      <div class="stmt-row" onclick="showToast('Downloading April 2026 statement…')">
+        <div style="width:32px;height:32px;border-radius:10px;background:rgba(2,186,38,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#02BA26" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="#02BA26" stroke-width="2"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;"><div class="text-primary" style="font-size:11px;font-weight:700;">April 2026</div><div class="text-muted" style="font-size:9px;">11 transactions · QAR 98.50</div></div>
+        <div style="font-size:9px;font-weight:700;color:#02BA26;">PDF</div>
+      </div>
+
+      <!-- Recent transactions -->
+      <div class="section-lbl section-lbl-clr" style="margin-top:8px;">Recent Transactions</div>
+      <div class="txn-list row-card">
+
+        <div class="txn-row">
+          <div class="txn-icon txn-icon-bg">☕</div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Tim Hortons</div>
+            <div class="text-muted" style="font-size:9px;">Today · 9:30 AM · Delivery</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#FF4444;">− QAR 30</div><div class="text-muted" style="font-size:8px;">Bal: 47.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon" style="background:rgba(2,186,38,0.15);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Top-up via QPay</div>
+            <div class="text-muted" style="font-size:9px;">Jun 14 · 8:50 AM</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#02BA26;">+ QAR 50</div><div class="text-muted" style="font-size:8px;">Bal: 77.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon txn-icon-bg">🥗</div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Oakberry</div>
+            <div class="text-muted" style="font-size:9px;">Jun 13 · 1:10 PM · Pickup</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#FF4444;">− QAR 32</div><div class="text-muted" style="font-size:8px;">Bal: 27.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon" style="background:rgba(2,186,38,0.15);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polyline points="1 4 1 10 7 10" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 1 0 .49-3.8" stroke="#02BA26" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Refund — Edge Cafe</div>
+            <div class="text-muted" style="font-size:9px;">Jun 12 · Cancelled order</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#02BA26;">+ QAR 36</div><div class="text-muted" style="font-size:8px;">Bal: 59.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon txn-icon-bg">☕</div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Caribou Coffee</div>
+            <div class="text-muted" style="font-size:9px;">Jun 11 · 10:20 AM · Pickup</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#FF4444;">− QAR 22</div><div class="text-muted" style="font-size:8px;">Bal: 23.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon txn-icon-bg">🍕</div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Edge Cafe</div>
+            <div class="text-muted" style="font-size:9px;">Jun 10 · 12:45 PM · Delivery</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#FF4444;">− QAR 26.50</div><div class="text-muted" style="font-size:8px;">Bal: 45.50</div></div>
+        </div>
+        <div class="txn-sep sep"></div>
+
+        <div class="txn-row">
+          <div class="txn-icon" style="background:rgba(2,186,38,0.15);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="#02BA26" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="txn-info">
+            <div class="text-primary" style="font-size:11px;font-weight:700;">Top-up via QPay</div>
+            <div class="text-muted" style="font-size:9px;">Jun 9 · 7:30 AM</div>
+          </div>
+          <div class="txn-amount"><div style="font-size:12px;font-weight:800;color:#02BA26;">+ QAR 100</div><div class="text-muted" style="font-size:8px;">Bal: 72.00</div></div>
+        </div>
+
+      </div>
+      <div style="margin:0 16px 14px;text-align:center;font-size:11px;font-weight:700;color:#02BA26;cursor:pointer;" onclick="showToast('Loading older transactions…')">Load older transactions →</div>
+      <div style="height:4px;"></div>
+    </div>
+
+  </div><!-- /phone-body -->
+
+  <!-- Top-up modal -->
+  <div class="topup-modal" id="topupModal" style="display:none;">
+    <div class="topup-sheet">
+      <div style="width:36px;height:4px;border-radius:2px;background:rgba(128,128,128,0.3);margin:0 auto 14px;"></div>
+      <div class="text-primary" style="font-size:14px;font-weight:800;margin-bottom:3px;">Top Up Wallet</div>
+      <div class="text-secondary" style="font-size:10px;">Current balance: <span style="color:#02BA26;font-weight:700;" id="modalBalance">QAR 47.50</span></div>
+      <div class="topup-input-row">
+        <div class="text-secondary" style="font-size:13px;font-weight:800;">QAR</div>
+        <input class="topup-input" type="number" id="topupInput" placeholder="Enter amount" min="10" max="500"/>
+      </div>
+      <div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;">
+        <div class="topup-chip active-chip" onclick="setTopupVal(20)">20</div>
+        <div class="topup-chip" onclick="setTopupVal(50)">50</div>
+        <div class="topup-chip" onclick="setTopupVal(100)">100</div>
+        <div class="topup-chip" onclick="setTopupVal(200)">200</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#02BA26,#106C2F);border-radius:50px;padding:12px;text-align:center;font-size:12px;font-weight:800;color:#fff;cursor:pointer;margin-bottom:8px;" onclick="confirmTopup()">
+        Continue with QPay
+      </div>
+      <div class="text-muted" style="text-align:center;font-size:10px;cursor:pointer;" onclick="closeTopup()">Cancel</div>
+    </div>
+  </div>
+
+  <!-- Pill nav -->
+  <div class="pill-nav-wrap">
+    <div class="pill-nav">
+      <div class="nav-item" onclick="window.location.href='home-mockup-v4.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="nav-item" onclick="window.location.href='order-tracking.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="3 6 10 3 17 6 21 4 21 18 17 20 10 17 3 20 3 6" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      </div>
+      <div class="nav-cart-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="21" r="1" stroke="#fff" stroke-width="2"/><circle cx="20" cy="21" r="1" stroke="#fff" stroke-width="2"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="cart-badge">2</div>
+      </div>
+      <div class="nav-item" onclick="window.location.href='orders-page.html'" style="cursor:pointer;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="#506050" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="nav-item" onclick="window.location.href='profile-page.html'" style="cursor:pointer;position:relative;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#02BA26"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="#02BA26"/></svg>
+        <div class="nav-dot"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /phone -->
+<div style="display:flex;justify-content:center;margin-top:10px;">
+  <span id="modeLabel" style="background:#02BA26;color:#fff;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;">Dark Mode</span>
+</div>
+</div>
+
+<p class="subtitle" style="margin-top:8px;">Overview · Insights · Transactions tabs · Budget tracker · Spending heatmap · Top restaurants</p>
+<div class="toast" id="toast"></div>
+
+<script>
+  let isDark = true;
+  let balance = 47.50;
+  let frozen = false;
+  let activeTab = 'overview';
+
+  function setMode(m) {
+    isDark = (m === 'dark');
+    document.getElementById('phone').className = 'phone ' + m;
+    document.getElementById('mDark').classList.toggle('active', isDark);
+    document.getElementById('mLight').classList.toggle('active', !isDark);
+    const lbl = document.getElementById('modeLabel');
+    if(isDark) { lbl.style.cssText='background:#02BA26;color:#fff;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;'; lbl.textContent='Dark Mode'; }
+    else { lbl.style.cssText='background:#EFF3EE;color:#0D1F0D;border:1px solid #C8D8C8;font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;'; lbl.textContent='Light Mode'; }
+    // keep modal theme
+    const modal = document.getElementById('topupModal');
+    if(modal.style.display !== 'none') {
+      modal.querySelector('.topup-sheet').style.background = isDark ? '#2A362A' : '#fff';
+    }
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    ['overview','insights','txns'].forEach(t => {
+      document.getElementById('view-'+t).style.display = (t===tab) ? 'block' : 'none';
+      document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    });
+    // move pill
+    const idx = ['overview','insights','txns'].indexOf(tab);
+    const barW = document.getElementById('tabBar').offsetWidth - 8;
+    const w = barW / 3;
+    document.getElementById('tabPill').style.left = (4 + idx * w) + 'px';
+    document.getElementById('tabPill').style.width = w + 'px';
+    // update text color for active/inactive
+    ['overview','insights','txns'].forEach(t => {
+      const btn = document.getElementById('tab-'+t);
+      btn.style.color = (t===tab) ? '#fff' : '';
+    });
+  }
+
+  function toggleFreeze() {
+    frozen = !frozen;
+    const overlay = document.getElementById('frozenOverlay');
+    overlay.style.display = frozen ? 'flex' : 'none';
+    document.getElementById('freezeIndicator').style.display = frozen ? 'block' : 'none';
+    document.getElementById('freezeLabel').textContent = frozen ? 'Unfreeze' : 'Freeze';
+    showToast(frozen ? '🔒 Card frozen — payments blocked' : '✓ Card unfrozen');
+  }
+
+  function openTopup() {
+    document.getElementById('topupModal').style.display = 'flex';
+    document.getElementById('topupInput').value = '';
+    document.getElementById('modalBalance').textContent = 'QAR ' + balance.toFixed(2);
+  }
+  function closeTopup() { document.getElementById('topupModal').style.display = 'none'; }
+  function setTopupVal(v) { document.getElementById('topupInput').value = v; }
+  function confirmTopup() {
+    const val = parseFloat(document.getElementById('topupInput').value);
+    if(!val || val < 10) { showToast('Minimum top-up is QAR 10'); return; }
+    balance += val;
+    document.getElementById('cardBalance').textContent = 'QAR ' + balance.toFixed(2);
+    closeTopup();
+    showToast('✓ QAR ' + val + ' added to wallet');
+  }
+
+  let selectedChip = null;
+  function selectChip(el, amt) {
+    document.querySelectorAll('.topup-chip').forEach(c => c.classList.remove('active-chip'));
+    el.classList.add('active-chip');
+    selectedChip = amt;
+  }
+
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // Init tab pill size after render
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const barW = document.getElementById('tabBar').offsetWidth - 8;
+      const w = barW / 3;
+      const pill = document.getElementById('tabPill');
+      pill.style.left = '4px';
+      pill.style.width = w + 'px';
+      document.getElementById('tab-overview').style.color = '#fff';
+    }, 50);
+  });
+</script>
+</body>
+</html>
