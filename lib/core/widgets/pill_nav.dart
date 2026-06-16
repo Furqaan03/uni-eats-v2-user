@@ -39,8 +39,10 @@ class PillNavBar extends StatelessWidget {
     final surfaceColor = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
     final inactiveColor = isDark ? AppColors.darkTextMuted : const Color(0xFFC0D0C0);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: surfaceColor,
@@ -92,6 +94,7 @@ class PillNavBar extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

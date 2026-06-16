@@ -13,6 +13,7 @@ import '../../core/widgets/section_header.dart';
 import '../../models/restaurant_model.dart';
 import '../../services/mock_data_service.dart';
 import '../wallet/providers/wallet_provider.dart';
+import 'providers/notifications_provider.dart';
 import 'widgets/campus_map_preview.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/flash_sale_banner.dart';
@@ -99,6 +100,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _showNotifications() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -375,94 +377,134 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 // ── Notifications sheet ────────────────────────────────────────────────────
 
-class _NotificationsSheet extends StatelessWidget {
+class _NotificationsSheet extends ConsumerWidget {
   const _NotificationsSheet();
 
-  static const _items = [
-    _NotifItem('🎉', 'Flash Sale Active!', 'Tim Hortons 30% OFF — ends soon'),
-    _NotifItem('✅', 'Order Delivered', 'Your Oakberry bowl arrived · 2h ago'),
-    _NotifItem('⭐', 'Rate Your Last Order', 'How was the Caribou Coffee experience?'),
-    _NotifItem('💳', 'Wallet Top-Up', 'QAR 50.00 added successfully · yesterday'),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final surfaceColor = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+    final items = ref.watch(notificationsProvider);
+    final notifier = ref.read(notificationsProvider.notifier);
 
-    return SingleChildScrollView(
-      child: Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Notifications',
-            style: AppTypography.heading.copyWith(color: textPrimary),
-          ),
-          const SizedBox(height: 12),
-          ..._items.map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurface3 : AppColors.lightSurface,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(item.emoji, style: const TextStyle(fontSize: 16)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.title,
-                            style: AppTypography.subheading.copyWith(
-                              color: textPrimary,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Text(
-                            item.subtitle,
-                            style: AppTypography.caption.copyWith(color: textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              )),
-        ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Notifications',
+                    style: AppTypography.heading.copyWith(color: textPrimary),
+                  ),
+                  if (items.isNotEmpty)
+                    TextButton(
+                      onPressed: notifier.clearAll,
+                      child: Text(
+                        'Clear All',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'No new notifications',
+                      style: AppTypography.body.copyWith(color: textSecondary),
+                    ),
+                  ),
+                )
+              else
+                ...items.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final item = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.push(item.route);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: surfaceColor,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(item.emoji, style: const TextStyle(fontSize: 18)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.title,
+                                    style: AppTypography.subheading.copyWith(
+                                      color: textPrimary,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item.subtitle,
+                                    style: AppTypography.caption.copyWith(color: textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close, size: 16, color: textSecondary),
+                              onPressed: () => notifier.dismiss(i),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
       ),
-    ),
     );
   }
-}
-
-class _NotifItem {
-  final String emoji;
-  final String title;
-  final String subtitle;
-  const _NotifItem(this.emoji, this.title, this.subtitle);
 }
 
 // ── Icon button ────────────────────────────────────────────────────────────
