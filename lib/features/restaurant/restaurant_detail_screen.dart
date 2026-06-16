@@ -341,7 +341,7 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
           ? _StickyCartBar(
               itemCount: cartCount,
               total: cartTotal,
-              onTap: () => context.push('/cart'),
+              onTap: () => context.go('/cart'),
             )
           : null,
     );

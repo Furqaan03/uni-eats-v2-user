@@ -15,14 +15,16 @@ import 'features/tracking/tracking_screen.dart';
 import 'features/wallet/wallet_screen.dart';
 import 'shell/dashboard_shell.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>();
-
 // Re-created whenever auth state changes so the redirect logic re-runs.
+// Key is scoped inside the provider so each GoRouter instance gets its own
+// key — avoids the `!keyReservation.contains(key)` assertion when the
+// provider rebuilds before the old router is fully disposed.
 final routerProvider = Provider<GoRouter>((ref) {
+  final rootNavigatorKey = GlobalKey<NavigatorState>();
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/home',
     // Auth guard — redirect unauthenticated users to /login.
     redirect: (context, state) {
@@ -83,7 +85,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/restaurant/:id',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           // Sanitise: only allow alphanumeric IDs to prevent IDOR path tricks.
@@ -95,22 +97,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/checkout',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const CheckoutScreen(),
       ),
       GoRoute(
         path: '/wallet',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const WalletScreen(),
       ),
       GoRoute(
         path: '/login',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: '/signup',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const SignupScreen(),
       ),
     ],

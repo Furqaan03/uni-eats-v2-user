@@ -10,15 +10,21 @@ class PillNavBar extends StatelessWidget {
 
   final NavTab currentTab;
   final int cartItemCount;
+  final void Function(NavTab tab)? onTabTap;
 
   const PillNavBar({
     super.key,
     required this.currentTab,
     this.cartItemCount = 0,
+    this.onTabTap,
   });
 
   void _onTap(BuildContext context, NavTab tab) {
     if (tab == currentTab) return;
+    if (onTabTap != null) {
+      onTabTap!(tab);
+      return;
+    }
     switch (tab) {
       case NavTab.home:
         context.go('/home');
@@ -39,11 +45,10 @@ class PillNavBar extends StatelessWidget {
     final surfaceColor = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
     final inactiveColor = isDark ? AppColors.darkTextMuted : const Color(0xFFC0D0C0);
 
-    return Align(
-      alignment: Alignment.center,
-      child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return Container(
+      margin: EdgeInsets.fromLTRB(16, 8, 16, 8 + bottomInset),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(50),
@@ -57,11 +62,10 @@ class PillNavBar extends StatelessWidget {
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
             _NavItem(
               icon: Icons.home_rounded,
               isActive: currentTab == NavTab.home,
@@ -92,12 +96,11 @@ class PillNavBar extends StatelessWidget {
               onTap: () => _onTap(context, NavTab.profile),
             ),
           ],
-        ),
       ),
-    ),
     );
   }
 }
+
 
 class _NavItem extends StatelessWidget {
   final IconData icon;

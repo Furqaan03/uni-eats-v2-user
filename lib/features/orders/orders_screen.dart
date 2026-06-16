@@ -1,7 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
@@ -997,55 +1003,566 @@ class _HistoryCard extends StatelessWidget {
   }
 
   void _showDetails(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final textPrimary = Theme.of(context).colorScheme.onSurface;
-        return AlertDialog(
-          backgroundColor: isDark ? AppColors.darkSurface3 : AppColors.lightSurface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'Order #${order.id}',
-            style: AppTypography.heading.copyWith(color: textPrimary),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(order.restaurantName, style: AppTypography.subheading.copyWith(color: textPrimary)),
-              const SizedBox(height: 8),
-              ...order.items.map(
-                (ci) => Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Text(
-                    '${ci.item.name} × ${ci.quantity} — ${CurrencyFormatter.format(ci.total)}',
-                    style: AppTypography.body.copyWith(color: textPrimary),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReceiptSheet(order: order),
+    );
+  }
+}
+
+// ───────────────────────── RECEIPT SHEET ─────────────────────────
+
+class _ReceiptSheet extends StatelessWidget {
+  final OrderModel order;
+
+  const _ReceiptSheet({required this.order});
+
+  Future<File> _buildReceiptPdf() async {
+    final date = DateFormat('MMM d, yyyy  h:mm a').format(order.createdAt);
+    final doc = pw.Document();
+
+    const green = PdfColor.fromInt(0xFF2E7D32);
+    const lightGreen = PdfColor.fromInt(0xFFE8F5E9);
+    const grey = PdfColor.fromInt(0xFF757575);
+    const divider = PdfColor.fromInt(0xFFE0E0E0);
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 48, vertical: 56),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // Header
+            pw.Container(
+              padding: const pw.EdgeInsets.all(20),
+              decoration: const pw.BoxDecoration(color: green),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'UNI EATS',
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 22,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'UDST Campus · Doha, Qatar',
+                        style: const pw.TextStyle(color: const PdfColor.fromInt(0xCCFFFFFF), fontSize: 10),
+                      ),
+                    ],
                   ),
-                ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'RECEIPT',
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        '#${order.id}',
+                        style: const pw.TextStyle(color: const PdfColor.fromInt(0xCCFFFFFF), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const Divider(height: 16),
-              Text(
-                'Total: ${CurrencyFormatter.format(order.total)}',
-                style: AppTypography.subheading.copyWith(color: AppColors.primary),
+            ),
+
+            pw.SizedBox(height: 24),
+
+            // Order meta
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                color: lightGreen,
+                borderRadius: pw.BorderRadius.circular(6),
               ),
-              if (order.cancelReason != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  order.cancelReason!,
-                  style: AppTypography.caption.copyWith(color: AppColors.danger),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  _pdfMeta('Restaurant', order.restaurantName),
+                  _pdfMeta('Date', date),
+                  _pdfMeta('Type',
+                      order.deliveryType == DeliveryType.delivery ? 'Delivery' : 'Pickup'),
+                  _pdfMeta('Payment', 'Uni Eats Wallet'),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 24),
+
+            // Items table header
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              color: const PdfColor.fromInt(0xFFF5F5F5),
+              child: pw.Row(
+                children: [
+                  pw.Expanded(
+                    flex: 5,
+                    child: pw.Text('ITEM',
+                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: grey)),
+                  ),
+                  pw.SizedBox(
+                    width: 40,
+                    child: pw.Text('QTY',
+                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: grey),
+                        textAlign: pw.TextAlign.center),
+                  ),
+                  pw.SizedBox(
+                    width: 70,
+                    child: pw.Text('PRICE',
+                        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: grey),
+                        textAlign: pw.TextAlign.right),
+                  ),
+                ],
+              ),
+            ),
+
+            // Items
+            ...order.items.asMap().entries.map((e) {
+              final ci = e.value;
+              final isEven = e.key.isEven;
+              return pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                color: isEven ? PdfColors.white : const PdfColor.fromInt(0xFFFAFAFA),
+                child: pw.Row(
+                  children: [
+                    pw.Expanded(
+                      flex: 5,
+                      child: pw.Text(ci.item.name,
+                          style: const pw.TextStyle(fontSize: 11)),
+                    ),
+                    pw.SizedBox(
+                      width: 40,
+                      child: pw.Text('× ${ci.quantity}',
+                          style: const pw.TextStyle(fontSize: 11),
+                          textAlign: pw.TextAlign.center),
+                    ),
+                    pw.SizedBox(
+                      width: 70,
+                      child: pw.Text(CurrencyFormatter.format(ci.total),
+                          style: const pw.TextStyle(fontSize: 11),
+                          textAlign: pw.TextAlign.right),
+                    ),
+                  ],
                 ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              );
+            }),
+
+            pw.Divider(color: divider, thickness: 1),
+            pw.SizedBox(height: 8),
+
+            // Totals
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 12),
+              child: pw.Column(
+                children: [
+                  _pdfTotalRow('Subtotal', CurrencyFormatter.format(order.subtotal), isMain: false),
+                  pw.SizedBox(height: 4),
+                  _pdfTotalRow('Delivery Fee', CurrencyFormatter.format(order.deliveryFee), isMain: false),
+                  pw.SizedBox(height: 8),
+                  pw.Divider(color: divider, thickness: 1),
+                  pw.SizedBox(height: 8),
+                  _pdfTotalRow('TOTAL', CurrencyFormatter.format(order.total), isMain: true),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 32),
+            pw.Divider(color: divider),
+            pw.SizedBox(height: 12),
+
+            // Footer
+            pw.Center(
+              child: pw.Text(
+                'Thank you for ordering with Uni Eats!',
+                style: const pw.TextStyle(fontSize: 11, color: grey),
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Center(
+              child: pw.Text(
+                'For support: support@unieats.qa',
+                style: const pw.TextStyle(fontSize: 9, color: grey),
+              ),
             ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/receipt_${order.id}.pdf');
+    await file.writeAsBytes(await doc.save());
+    return file;
+  }
+
+  pw.Widget _pdfMeta(String label, String value) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                  fontSize: 8,
+                  fontWeight: pw.FontWeight.bold,
+                  color: const PdfColor.fromInt(0xFF4CAF50))),
+          pw.SizedBox(height: 2),
+          pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
+        ],
+      );
+
+  pw.Widget _pdfTotalRow(String label, String value, {required bool isMain}) => pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                fontSize: isMain ? 13 : 11,
+                fontWeight: isMain ? pw.FontWeight.bold : pw.FontWeight.normal,
+              )),
+          pw.Text(value,
+              style: pw.TextStyle(
+                fontSize: isMain ? 13 : 11,
+                fontWeight: isMain ? pw.FontWeight.bold : pw.FontWeight.normal,
+                color: isMain ? const PdfColor.fromInt(0xFF2E7D32) : PdfColors.black,
+              )),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+    final date = DateFormat('MMM d, yyyy  h:mm a').format(order.createdAt);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Receipt',
+                        style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 18),
+                      ),
+                      Text(
+                        'Order #${order.id}',
+                        style: AppTypography.caption.copyWith(color: textMuted, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close_rounded, color: textMuted, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Scrollable receipt body
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                children: [
+                  // Restaurant + status
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: _thumbGradient(order.restaurantId),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                order.restaurantName,
+                                style: AppTypography.subheading.copyWith(color: Colors.white, fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                date,
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _Tag(
+                          label: order.deliveryType == DeliveryType.delivery ? 'Delivery' : 'Pickup',
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Items
+                  _ReceiptSection(
+                    title: 'Items',
+                    isDark: isDark,
+                    child: Column(
+                      children: order.items.map((ci) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ci.item.name,
+                                style: AppTypography.body.copyWith(color: textPrimary, fontSize: 12),
+                              ),
+                            ),
+                            Text(
+                              '× ${ci.quantity}',
+                              style: AppTypography.caption.copyWith(color: textMuted, fontSize: 11),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              CurrencyFormatter.format(ci.total),
+                              style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Totals
+                  _ReceiptSection(
+                    title: 'Summary',
+                    isDark: isDark,
+                    child: Column(
+                      children: [
+                        _ReceiptRow(label: 'Subtotal', value: CurrencyFormatter.format(order.subtotal), muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        const SizedBox(height: 4),
+                        _ReceiptRow(label: 'Delivery Fee', value: CurrencyFormatter.format(order.deliveryFee), muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Divider(color: isDark ? Colors.white12 : Colors.black12, height: 1),
+                        ),
+                        const SizedBox(height: 8),
+                        _ReceiptRow(label: 'Total', value: CurrencyFormatter.format(order.total), muted: false, textPrimary: textPrimary, textSecondary: textSecondary),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Payment
+                  _ReceiptSection(
+                    title: 'Payment',
+                    isDark: isDark,
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.walletGradient,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Noqoody',
+                            style: AppTypography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 9),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Uni Eats Wallet',
+                          style: AppTypography.body.copyWith(color: textPrimary, fontSize: 12),
+                        ),
+                        const Spacer(),
+                        Text(
+                          CurrencyFormatter.format(order.total),
+                          style: AppTypography.subheading.copyWith(color: AppColors.primary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (order.cancelReason != null) ...[
+                    const SizedBox(height: 10),
+                    _ReceiptSection(
+                      title: 'Cancellation',
+                      isDark: isDark,
+                      child: Text(
+                        order.cancelReason!,
+                        style: AppTypography.caption.copyWith(color: AppColors.danger, fontSize: 11),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // Download button
+                  GestureDetector(
+                    onTap: () async {
+                      final file = await _buildReceiptPdf();
+                      await Share.shareXFiles(
+                        [XFile(file.path, mimeType: 'application/pdf')],
+                        subject: 'Uni Eats Receipt — Order #${order.id}',
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [AppColors.primary, AppColors.primaryDark],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Download Receipt',
+                            style: AppTypography.button.copyWith(color: Colors.white, fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReceiptSection extends StatelessWidget {
+  final String title;
+  final Widget child;
+  final bool isDark;
+
+  const _ReceiptSection({required this.title, required this.child, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: AppTypography.label.copyWith(
+              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+              fontSize: 9,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ReceiptRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool muted;
+  final Color textPrimary;
+  final Color textSecondary;
+
+  const _ReceiptRow({
+    required this.label,
+    required this.value,
+    required this.muted,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: muted
+              ? AppTypography.caption.copyWith(color: textSecondary, fontSize: 12)
+              : AppTypography.subheading.copyWith(color: textPrimary, fontSize: 13),
+        ),
+        Text(
+          value,
+          style: muted
+              ? AppTypography.body.copyWith(color: textPrimary, fontSize: 12)
+              : AppTypography.subheading.copyWith(color: AppColors.primary, fontSize: 14),
+        ),
+      ],
     );
   }
 }

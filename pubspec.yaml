@@ -31,6 +31,9 @@ dependencies:
   intl: ^0.20.1
   shared_preferences: ^2.3.3
   uuid: ^4.5.1
+  share_plus: ^10.1.4
+  pdf: ^3.11.1
+  path_provider: ^2.1.5
 
   # Security TODOs (MVP placeholders)
   # flutter_secure_storage: ^9.2.2  # TODO: enable for release

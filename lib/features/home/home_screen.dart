@@ -184,7 +184,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           const SizedBox(width: 10),
                           GestureDetector(
-                            onTap: () => context.push('/profile'),
+                            onTap: () => context.go('/profile'),
                             child: CircleAvatar(
                               radius: 18,
                               backgroundColor: AppColors.primary,
