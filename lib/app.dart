@@ -18,7 +18,7 @@ class UniEatsApp extends ConsumerWidget {
       themeMode: themeMode,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      routerConfig: router,
+      routerConfig: ref.watch(routerProvider),
     );
   }
 }

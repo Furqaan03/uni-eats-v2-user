@@ -13,12 +13,14 @@ import '../models/wallet_transaction_model.dart';
 class MockDataService {
   MockDataService._();
 
+  // TODO: Replace with authenticated user from Firebase Auth in production.
+  // No real PII here — all values are fictional placeholders.
   static final UserModel currentUser = UserModel(
     id: 'u001',
     name: 'Ahmed',
     email: 'ahmed@udst.edu.qa',
-    phone: '+974 55xx xxxx',
-    universityId: '60102677',
+    phone: '+974 XXXX XXXX',
+    universityId: '00000000',
     role: UserRole.student,
     walletBalance: 47.50,
     loyaltyPoints: 1240,

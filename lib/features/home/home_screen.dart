@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +28,99 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _selectedCategory = 'All';
   String _selectedFilter = 'Nearest';
+  String _searchQuery = '';
+  late TextEditingController _searchController;
+  late ScrollController _scrollController;
+
+  // Flash sale ends in 1h 24m 33s from app start — just a demo countdown.
+  late Duration _flashSaleRemaining;
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _scrollController = ScrollController();
+    _flashSaleRemaining = const Duration(hours: 1, minutes: 24, seconds: 33);
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (_flashSaleRemaining.inSeconds <= 0) {
+        _countdownTimer?.cancel();
+        return;
+      }
+      setState(() {
+        _flashSaleRemaining -= const Duration(seconds: 1);
+      });
+    });
+  }
+
+  String get _flashSaleLabel {
+    final h = _flashSaleRemaining.inHours;
+    final m = _flashSaleRemaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = _flashSaleRemaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return h > 0 ? 'Ends ${h}h ${m}m ${s}s' : 'Ends ${m}:${s}';
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  List<RestaurantModel> get _baseList {
+    if (_selectedCategory == 'All') {
+      return List.from(MockDataService.restaurants);
+    }
+    return MockDataService.restaurants.where((r) => _matchesCategory(r.category)).toList();
+  }
+
+  List<RestaurantModel> _applySearchAndFilter(List<RestaurantModel> list) {
+    var result = list;
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      result = result
+          .where((r) =>
+              r.name.toLowerCase().contains(q) ||
+              r.category.toLowerCase().contains(q) ||
+              r.building.toLowerCase().contains(q))
+          .toList();
+    }
+
+    return _applyFilter(result);
+  }
+
+  void _showNotifications() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const _NotificationsSheet(),
+    );
+  }
+
+  void _scrollToAllRestaurants() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _showTopRated() {
+    setState(() {
+      _selectedFilter = 'Rating 4+';
+      _selectedCategory = 'All';
+    });
+    _scrollToAllRestaurants();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,16 +129,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final mutedColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
     final balance = ref.watch(walletBalanceProvider);
 
-    List<RestaurantModel> filteredRestaurants = _selectedCategory == 'All'
-        ? List.from(MockDataService.restaurants)
-        : MockDataService.restaurants
-            .where((r) => _matchesCategory(r.category))
-            .toList();
-
-    filteredRestaurants = _applyFilter(filteredRestaurants);
+    final filteredRestaurants = _applySearchAndFilter(_baseList);
 
     return Scaffold(
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           SliverToBoxAdapter(
             child: Column(
@@ -86,16 +176,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           _IconButton(
                             icon: Icons.notifications_outlined,
                             badge: true,
-                            onTap: () {},
+                            onTap: _showNotifications,
                           ),
                           const SizedBox(width: 10),
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: AppColors.primary,
-                            child: Text(
-                              MockDataService.currentUser.name[0],
-                              style: AppTypography.subheading.copyWith(
-                                color: Colors.white,
+                          GestureDetector(
+                            onTap: () => context.push('/profile'),
+                            child: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: AppColors.primary,
+                              child: Text(
+                                MockDataService.currentUser.name[0],
+                                style: AppTypography.subheading.copyWith(
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -105,7 +198,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const UniSearchBar(),
+                UniSearchBar(
+                  controller: _searchController,
+                  onChanged: (q) => setState(() => _searchQuery = q),
+                ),
                 const SizedBox(height: 12),
                 WalletMiniCard(balance: balance),
                 const SizedBox(height: 6),
@@ -114,82 +210,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onSelected: (c) => setState(() => _selectedCategory = c),
                 ),
                 const SizedBox(height: 8),
-                const SectionHeader(
-                  title: '⚡ Flash Sale',
-                  actionText: 'Ends 01:24:33',
-                ),
-                const FlashSaleBanner(),
-                const SectionHeader(
-                  title: '🔥 Trending Now',
-                  actionText: 'See all',
-                ),
+                if (_searchQuery.isEmpty) ...[
+                  SectionHeader(
+                    title: '⚡ Flash Sale',
+                    actionText: _flashSaleLabel,
+                  ),
+                  FlashSaleBanner(
+                    onTap: () => context.push('/restaurant/r001'),
+                  ),
+                  SectionHeader(
+                    title: '🔥 Trending Now',
+                    actionText: 'See all',
+                    onAction: _scrollToAllRestaurants,
+                  ),
+                ],
               ],
             ),
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 160,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: MockDataService.restaurants.length,
-                itemBuilder: (context, index) {
-                  final restaurant = MockDataService.restaurants[index];
-                  return RestaurantCard(
-                    restaurant: restaurant,
-                    onTap: () => context.push('/restaurant/${restaurant.id}'),
-                    width: 170,
-                  );
-                },
+          if (_searchQuery.isEmpty) ...[
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 160,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: MockDataService.restaurants.length,
+                  itemBuilder: (context, index) {
+                    final restaurant = MockDataService.restaurants[index];
+                    return RestaurantCard(
+                      restaurant: restaurant,
+                      onTap: () => context.push('/restaurant/${restaurant.id}'),
+                      width: 170,
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-          const SliverToBoxAdapter(
-            child: SectionHeader(
-              title: '⭐ Top Rated',
-              actionText: 'See all',
-            ),
-          ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final restaurant = MockDataService.restaurants[index];
-                return RestaurantListTile(
-                  restaurant: restaurant,
-                  onTap: () => context.push('/restaurant/${restaurant.id}'),
-                );
-              },
-              childCount: 2,
-            ),
-          ),
-          const SliverToBoxAdapter(
-            child: SectionHeader(
-              title: '📍 Near Me',
-              actionText: 'Open map',
-            ),
-          ),
-          const SliverToBoxAdapter(child: CampusMapPreview()),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 154,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: MockDataService.restaurants.length,
-                itemBuilder: (context, index) {
-                  final restaurant = MockDataService.restaurants[index];
-                  return RestaurantCard(
-                    restaurant: restaurant,
-                    onTap: () => context.push('/restaurant/${restaurant.id}'),
-                    width: 120,
-                  );
-                },
+            SliverToBoxAdapter(
+              child: SectionHeader(
+                title: '⭐ Top Rated',
+                actionText: 'See all',
+                onAction: _showTopRated,
               ),
             ),
-          ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final restaurant = MockDataService.restaurants[index];
+                  return RestaurantListTile(
+                    restaurant: restaurant,
+                    onTap: () => context.push('/restaurant/${restaurant.id}'),
+                  );
+                },
+                childCount: 2,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: SectionHeader(
+                title: '📍 Near Me',
+                actionText: 'Open map',
+                onAction: () => context.go('/tracking'),
+              ),
+            ),
+            const SliverToBoxAdapter(child: CampusMapPreview()),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 154,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: MockDataService.restaurants.length,
+                  itemBuilder: (context, index) {
+                    final restaurant = MockDataService.restaurants[index];
+                    return RestaurantCard(
+                      restaurant: restaurant,
+                      onTap: () => context.push('/restaurant/${restaurant.id}'),
+                      width: 120,
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
           SliverToBoxAdapter(
             child: SectionHeader(
-              title: '🏪 All Restaurants',
+              title: _searchQuery.isNotEmpty
+                  ? '🔍 Results for "$_searchQuery"'
+                  : '🏪 All Restaurants',
               actionText: '${filteredRestaurants.length} places',
             ),
           ),
@@ -199,18 +306,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onSelected: (f) => setState(() => _selectedFilter = f),
             ),
           ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final restaurant = filteredRestaurants[index];
-                return RestaurantListTile(
-                  restaurant: restaurant,
-                  onTap: () => context.push('/restaurant/${restaurant.id}'),
-                );
-              },
-              childCount: filteredRestaurants.length,
-            ),
-          ),
+          filteredRestaurants.isEmpty
+              ? SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Text('🍽️', style: TextStyle(fontSize: 40)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No restaurants found',
+                            style: AppTypography.subheading.copyWith(
+                              color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              : SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final restaurant = filteredRestaurants[index];
+                      return RestaurantListTile(
+                        restaurant: restaurant,
+                        onTap: () => context.push('/restaurant/${restaurant.id}'),
+                      );
+                    },
+                    childCount: filteredRestaurants.length,
+                  ),
+                ),
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
@@ -220,7 +347,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _matchesCategory(String category) {
     return switch (_selectedCategory) {
       '☕ Coffee' => category.contains('Coffee') || category.contains('Café'),
-      '🍔 Food' => category.contains('Food') || category.contains('Asian') || category.contains('Qatari'),
+      '🍔 Food' =>
+        category.contains('Food') || category.contains('Asian') || category.contains('Qatari'),
       '🥗 Healthy' => category.contains('Healthy') || category.contains('Açaí'),
       '🍰 Dessert' => category.contains('Bakery') || category.contains('Dessert'),
       '🥤 Drinks' => category.contains('Drinks') || category.contains('Cold'),
@@ -244,6 +372,98 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return restaurants;
   }
 }
+
+// ── Notifications sheet ────────────────────────────────────────────────────
+
+class _NotificationsSheet extends StatelessWidget {
+  const _NotificationsSheet();
+
+  static const _items = [
+    _NotifItem('🎉', 'Flash Sale Active!', 'Tim Hortons 30% OFF — ends soon'),
+    _NotifItem('✅', 'Order Delivered', 'Your Oakberry bowl arrived · 2h ago'),
+    _NotifItem('⭐', 'Rate Your Last Order', 'How was the Caribou Coffee experience?'),
+    _NotifItem('💳', 'Wallet Top-Up', 'QAR 50.00 added successfully · yesterday'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Notifications',
+            style: AppTypography.heading.copyWith(color: textPrimary),
+          ),
+          const SizedBox(height: 12),
+          ..._items.map((item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurface3 : AppColors.lightSurface,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(item.emoji, style: const TextStyle(fontSize: 16)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: AppTypography.subheading.copyWith(
+                              color: textPrimary,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            item.subtitle,
+                            style: AppTypography.caption.copyWith(color: textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotifItem {
+  final String emoji;
+  final String title;
+  final String subtitle;
+  const _NotifItem(this.emoji, this.title, this.subtitle);
+}
+
+// ── Icon button ────────────────────────────────────────────────────────────
 
 class _IconButton extends StatelessWidget {
   final IconData icon;
@@ -303,6 +523,8 @@ class _IconButton extends StatelessWidget {
     );
   }
 }
+
+// ── Filter chips ───────────────────────────────────────────────────────────
 
 class _FilterChips extends StatelessWidget {
   final String selected;

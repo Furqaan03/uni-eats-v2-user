@@ -27,25 +27,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _errorMessage(AuthError? error) {
+    return switch (error) {
+      AuthError.invalidEmail => 'Please enter a valid email address.',
+      AuthError.notUdstDomain => 'Only @udst.edu.qa email addresses are accepted.',
+      AuthError.weakPassword =>
+        'Password must be 8+ characters with uppercase, lowercase, and a digit.',
+      AuthError.tooManyAttempts =>
+        'Too many failed attempts. Please try again later.',
+      // Generic message — never reveal which field is wrong.
+      _ => 'Invalid email or password.',
+    };
+  }
+
   Future<void> _signIn() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
-    final success = await ref.read(authProvider.notifier).signIn(
+    final result = await ref.read(authProvider.notifier).signIn(
           _emailController.text.trim(),
           _passwordController.text,
         );
 
     if (!mounted) return;
-
     setState(() => _isLoading = false);
 
-    if (success) {
+    if (result.success) {
       context.go('/home');
     } else {
-      setState(() => _error = 'Invalid credentials. Use any email + 6+ char password.');
+      setState(() => _error = _errorMessage(result.error));
     }
   }
 
@@ -69,13 +81,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in with your UDST student email',
+                'Sign in with your UDST email',
                 style: AppTypography.body.copyWith(color: textSecondary),
               ),
               const SizedBox(height: 40),
               AuthInputField(
                 controller: _emailController,
-                label: 'Email',
+                label: 'UDST Email',
+                hint: 'you@udst.edu.qa',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -131,7 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const Spacer(),
               Center(
                 child: Text(
-                  'Students & faculty only',
+                  'Students & faculty only · @udst.edu.qa',
                   style: AppTypography.caption.copyWith(color: textSecondary),
                 ),
               ),
@@ -143,4 +156,3 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-

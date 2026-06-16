@@ -33,13 +33,38 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     super.dispose();
   }
 
+  String _errorMessage(AuthError? error) {
+    return switch (error) {
+      AuthError.emptyFields => 'Please fill in all fields.',
+      AuthError.invalidEmail => 'Please enter a valid email address.',
+      AuthError.notUdstDomain => 'Use your UDST email (e.g. name@udst.edu.qa).',
+      AuthError.weakPassword =>
+        'Password must be 8+ characters with uppercase, lowercase, and a digit.',
+      AuthError.invalidId => 'University ID must be exactly 8 digits.',
+      _ => 'Something went wrong. Please try again.',
+    };
+  }
+
   Future<void> _signUp() async {
+    // Client-side pre-check to give immediate feedback before async call.
+    final quickErrors = [
+      if (_nameController.text.trim().isEmpty) AuthError.emptyFields,
+      AuthNotifier.validateEmail(_emailController.text.trim()),
+      AuthNotifier.validatePassword(_passwordController.text),
+      AuthNotifier.validateUniversityId(_idController.text.trim()),
+    ].whereType<AuthError>().toList();
+
+    if (quickErrors.isNotEmpty) {
+      setState(() => _error = _errorMessage(quickErrors.first));
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
-    final success = await ref.read(authProvider.notifier).signUp(
+    final result = await ref.read(authProvider.notifier).signUp(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
@@ -48,13 +73,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         );
 
     if (!mounted) return;
-
     setState(() => _isLoading = false);
 
-    if (success) {
+    if (result.success) {
       context.go('/home');
     } else {
-      setState(() => _error = 'Please fill all fields and use a password of 6+ characters.');
+      setState(() => _error = _errorMessage(result.error));
     }
   }
 
@@ -83,15 +107,17 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               const SizedBox(height: 16),
               AuthInputField(
                 controller: _emailController,
-                label: 'Student / Faculty Email',
+                label: 'UDST Email',
+                hint: 'you@udst.edu.qa',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               AuthInputField(
                 controller: _idController,
-                label: 'University ID',
+                label: 'University ID (8 digits)',
                 icon: Icons.badge_outlined,
+                keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 16),
               AuthInputField(
@@ -99,6 +125,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 label: 'Password',
                 icon: Icons.lock_outline,
                 obscureText: true,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '8+ chars · uppercase · lowercase · digit',
+                style: AppTypography.caption.copyWith(color: textSecondary),
               ),
               const SizedBox(height: 16),
               Text('Account Type', style: AppTypography.caption.copyWith(color: textSecondary)),
