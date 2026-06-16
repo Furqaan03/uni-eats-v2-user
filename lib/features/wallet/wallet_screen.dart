@@ -9,6 +9,7 @@ import '../../core/widgets/uni_toast.dart';
 import '../../models/wallet_transaction_model.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../home/providers/notifications_provider.dart';
 import 'providers/wallet_provider.dart';
 
 enum _WalletTab { overview, insights, transactions }
@@ -126,6 +127,15 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         initialAmount: initialAmount,
         onTopUp: (amount) {
           ref.read(walletBalanceProvider.notifier).topUp(amount);
+          ref.read(notificationsProvider.notifier).addNotification(
+                NotificationItem(
+                  emoji: '💳',
+                  title: 'Wallet Top-Up',
+                  subtitle: 'QAR ${amount.toStringAsFixed(2)} added successfully',
+                  route: '/wallet',
+                  navType: NotifNavType.push,
+                ),
+              );
         },
       ),
     );

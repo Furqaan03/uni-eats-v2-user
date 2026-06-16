@@ -98,6 +98,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _showNotifications() {
+    // Mark all as read as soon as the user opens the panel.
+    ref.read(notificationsProvider.notifier).markAllRead();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -177,7 +179,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         children: [
                           _IconButton(
                             icon: Icons.notifications_outlined,
-                            badge: true,
+                            badge: ref.watch(hasUnreadNotificationsProvider),
                             onTap: _showNotifications,
                           ),
                           const SizedBox(width: 10),
@@ -412,13 +414,15 @@ class _NotificationsSheet extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Notifications',
-                    style: AppTypography.heading.copyWith(color: textPrimary),
-                  ),
+                  Text('Notifications', style: AppTypography.heading.copyWith(color: textPrimary)),
                   if (items.isNotEmpty)
                     TextButton(
                       onPressed: notifier.clearAll,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                       child: Text(
                         'Clear All',
                         style: AppTypography.caption.copyWith(
@@ -434,67 +438,62 @@ class _NotificationsSheet extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: Text(
-                      'No new notifications',
-                      style: AppTypography.body.copyWith(color: textSecondary),
-                    ),
+                    child: Text('No new notifications',
+                        style: AppTypography.body.copyWith(color: textSecondary)),
                   ),
                 )
               else
                 ...items.asMap().entries.map((entry) {
                   final i = entry.key;
                   final item = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        Navigator.of(context).pop();
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      if (item.navType == NotifNavType.go) {
+                        context.go(item.route);
+                      } else {
                         context.push(item.route);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: surfaceColor,
-                                shape: BoxShape.circle,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(item.emoji, style: const TextStyle(fontSize: 18)),
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: surfaceColor,
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.title,
-                                    style: AppTypography.subheading.copyWith(
-                                      color: textPrimary,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    item.subtitle,
-                                    style: AppTypography.caption.copyWith(color: textSecondary),
-                                  ),
-                                ],
-                              ),
+                            alignment: Alignment.center,
+                            child: Text(item.emoji, style: const TextStyle(fontSize: 18)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title,
+                                  style: AppTypography.subheading
+                                      .copyWith(color: textPrimary, fontSize: 13),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.subtitle,
+                                  style: AppTypography.caption.copyWith(color: textSecondary),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: Icon(Icons.close, size: 16, color: textSecondary),
-                              onPressed: () => notifier.dismiss(i),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                            ),
-                          ],
-                        ),
+                          ),
+                          GestureDetector(
+                            onTap: () => notifier.dismiss(i),
+                            child: Icon(Icons.close, size: 16, color: textSecondary),
+                          ),
+                        ],
                       ),
                     ),
                   );

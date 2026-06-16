@@ -9,6 +9,7 @@ import '../../core/widgets/uni_toast.dart';
 import '../../models/order_model.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../home/providers/notifications_provider.dart';
 import '../orders/providers/orders_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
 import 'providers/cart_provider.dart';
@@ -248,6 +249,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     ref.read(ordersProvider.notifier).addOrder(order);
     ref.read(cartProvider.notifier).clear();
+    ref.read(notificationsProvider.notifier).scheduleOrderNotifications(restaurant.name);
 
     UniToast.show(context, 'Order placed successfully');
     context.go('/orders');
