@@ -391,7 +391,8 @@ class _NotificationsSheet extends StatelessWidget {
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
-    return Container(
+    return SingleChildScrollView(
+      child: Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -452,6 +453,7 @@ class _NotificationsSheet extends StatelessWidget {
               )),
         ],
       ),
+    ),
     );
   }
 }
