@@ -7,6 +7,7 @@ import '../../core/theme/typography.dart';
 import '../../models/user_model.dart';
 import 'providers/auth_provider.dart';
 import 'widgets/auth_input_field.dart';
+import 'widgets/google_signin_button.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -22,6 +23,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   UserRole _role = UserRole.student;
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   String? _error;
 
   @override
@@ -37,10 +39,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     return switch (error) {
       AuthError.emptyFields => 'Please fill in all fields.',
       AuthError.invalidEmail => 'Please enter a valid email address.',
-      AuthError.notUdstDomain => 'Use your UDST email (e.g. name@udst.edu.qa).',
-      AuthError.weakPassword =>
-        'Password must be 8+ characters with uppercase, lowercase, and a digit.',
-      AuthError.invalidId => 'University ID must be exactly 8 digits.',
+      AuthError.weakPassword => 'Password must be at least 6 characters.',
+      AuthError.emailInUseDifferentPassword =>
+        'An account with this email already exists with a different password. Try signing in instead.',
       _ => 'Something went wrong. Please try again.',
     };
   }
@@ -82,6 +83,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
   }
 
+  Future<void> _signUpWithGoogle() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _error = null;
+    });
+
+    final error = await ref.read(authProvider.notifier).signInWithGoogle();
+
+    if (!mounted) return;
+    setState(() => _isGoogleLoading = false);
+
+    if (error != null) {
+      setState(() => _error = error);
+    } else {
+      context.go('/home');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -107,15 +126,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               const SizedBox(height: 16),
               AuthInputField(
                 controller: _emailController,
-                label: 'UDST Email',
-                hint: 'you@udst.edu.qa',
+                label: 'Email',
+                hint: 'you@example.com',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 16),
               AuthInputField(
                 controller: _idController,
-                label: 'University ID (8 digits)',
+                label: 'University ID',
                 icon: Icons.badge_outlined,
                 keyboardType: TextInputType.number,
               ),
@@ -128,7 +147,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                '8+ chars · uppercase · lowercase · digit',
+                'At least 6 characters',
                 style: AppTypography.caption.copyWith(color: textSecondary),
               ),
               const SizedBox(height: 16),
@@ -162,6 +181,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         )
                       : const Text('Create Account'),
                 ),
+              ),
+              const SizedBox(height: 16),
+              const AuthOrDivider(),
+              const SizedBox(height: 16),
+              GoogleSignInButton(
+                loading: _isGoogleLoading,
+                onPressed: (_isLoading || _isGoogleLoading) ? null : _signUpWithGoogle,
               ),
               const SizedBox(height: 16),
               Center(

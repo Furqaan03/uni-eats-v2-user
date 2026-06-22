@@ -13,6 +13,8 @@ class MenuItemModel {
   final bool isBestseller;
   final bool isNew;
   final bool isPopular;
+  // 0-100 percent discount set by the vendor — null/0 means no discount.
+  final double? discountPercent;
 
   const MenuItemModel({
     required this.id,
@@ -26,7 +28,11 @@ class MenuItemModel {
     this.isBestseller = false,
     this.isNew = false,
     this.isPopular = false,
+    this.discountPercent,
   });
+
+  bool get hasDiscount => discountPercent != null && discountPercent! > 0;
+  double get effectivePrice => hasDiscount ? price * (1 - discountPercent! / 100) : price;
 
   MenuItemModel copyWith({
     String? id,
@@ -40,6 +46,8 @@ class MenuItemModel {
     bool? isBestseller,
     bool? isNew,
     bool? isPopular,
+    double? discountPercent,
+    bool clearDiscount = false,
   }) {
     return MenuItemModel(
       id: id ?? this.id,
@@ -53,6 +61,7 @@ class MenuItemModel {
       isBestseller: isBestseller ?? this.isBestseller,
       isNew: isNew ?? this.isNew,
       isPopular: isPopular ?? this.isPopular,
+      discountPercent: clearDiscount ? null : (discountPercent ?? this.discountPercent),
     );
   }
 }

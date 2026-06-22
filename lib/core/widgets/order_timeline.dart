@@ -15,7 +15,6 @@ class OrderTimeline extends StatelessWidget {
       children: List.generate(steps.length * 2 - 1, (index) {
         if (index.isOdd) {
           final stepIndex = index ~/ 2;
-          final isComplete = steps[stepIndex].isComplete;
           final nextComplete =
               stepIndex + 1 < steps.length && steps[stepIndex + 1].isComplete;
           return Expanded(

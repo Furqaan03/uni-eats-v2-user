@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
-import '../../core/widgets/uni_toast.dart';
 import '../../utils/currency_formatter.dart';
 import 'providers/cart_provider.dart';
 
@@ -19,11 +18,22 @@ class CartScreen extends ConsumerWidget {
 
     final cart = ref.watch(cartProvider);
     final total = ref.watch(cartTotalProvider);
-    final deliveryFee = 2.50;
-    final grandTotal = total + deliveryFee;
+
+    final lastRestaurantId = ref.watch(lastViewedRestaurantProvider);
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: lastRestaurantId != null ? 'Back to menu' : 'Back to home',
+          onPressed: () {
+            if (lastRestaurantId != null) {
+              context.push('/restaurant/$lastRestaurantId');
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
         title: Text(
           'My Cart',
           style: AppTypography.heading.copyWith(color: textPrimary),
@@ -87,7 +97,7 @@ class CartScreen extends ConsumerWidget {
                                     ),
                                   ),
                                   Text(
-                                    CurrencyFormatter.format(cartItem.item.price),
+                                    CurrencyFormatter.format(cartItem.item.effectivePrice),
                                     style: AppTypography.caption.copyWith(
                                       color: textSecondary,
                                     ),
@@ -138,12 +148,12 @@ class CartScreen extends ConsumerWidget {
                     child: Column(
                       children: [
                         _SummaryRow(label: 'Subtotal', value: total),
-                        _SummaryRow(label: 'Delivery Fee', value: deliveryFee),
                         const Divider(height: 24),
                         _SummaryRow(
                           label: 'Total',
-                          value: grandTotal,
+                          value: total,
                           isTotal: true,
+                          note: '+ delivery fee at checkout',
                         ),
                         const SizedBox(height: 16),
                         SizedBox(
@@ -190,15 +200,18 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final double value;
   final bool isTotal;
+  final String? note;
 
   const _SummaryRow({
     required this.label,
     required this.value,
     this.isTotal = false,
+    this.note,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
 
     return Padding(
@@ -206,11 +219,29 @@ class _SummaryRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: isTotal
-                ? AppTypography.subheading.copyWith(color: textPrimary)
-                : AppTypography.body.copyWith(color: AppColors.lightTextSecondary),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: isTotal
+                    ? AppTypography.subheading.copyWith(color: textPrimary)
+                    : AppTypography.body.copyWith(
+                        color: isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary),
+              ),
+              if (note != null)
+                Text(
+                  note!,
+                  style: AppTypography.caption.copyWith(
+                    color: isDark
+                        ? AppColors.darkTextMuted
+                        : AppColors.lightTextMuted,
+                    fontSize: 10,
+                  ),
+                ),
+            ],
           ),
           Text(
             CurrencyFormatter.format(value),

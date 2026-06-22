@@ -3,9 +3,20 @@ import 'package:uuid/uuid.dart';
 
 import '../../../models/cart_item_model.dart';
 import '../../../models/menu_item_model.dart';
+import '../../../models/user_model.dart';
+import '../../auth/providers/auth_provider.dart';
 
 final cartProvider = StateNotifierProvider<CartNotifier, List<CartItemModel>>((ref) {
-  return CartNotifier();
+  final notifier = CartNotifier();
+  // Don't let a cart leak across users sharing a device (logout/login).
+  String? lastUserId;
+  ref.listen<UserModel?>(authProvider, (previous, next) {
+    final newId = next?.id ?? '';
+    if (newId == lastUserId) return;
+    lastUserId = newId;
+    notifier.clear();
+  }, fireImmediately: true);
+  return notifier;
 });
 
 final cartTotalProvider = Provider<double>((ref) {
@@ -17,6 +28,11 @@ final cartItemCountProvider = Provider<int>((ref) {
   final cart = ref.watch(cartProvider);
   return cart.fold(0, (sum, item) => sum + item.quantity);
 });
+
+/// Tracks the most recently viewed restaurant so the Cart screen can offer
+/// a way back to add more items, even though `/cart` is a tab route with
+/// no Navigator back-stack to pop to.
+final lastViewedRestaurantProvider = StateProvider<String?>((ref) => null);
 
 class CartNotifier extends StateNotifier<List<CartItemModel>> {
   CartNotifier() : super([]);

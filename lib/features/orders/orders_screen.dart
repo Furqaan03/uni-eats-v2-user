@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,16 +27,48 @@ class OrdersScreen extends ConsumerStatefulWidget {
 class _OrdersScreenState extends ConsumerState<OrdersScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  int _lastTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
-      if (_tabController.indexIsChanging || _tabController.index >= 0) {
+      if (_tabController.index != _lastTabIndex) {
+        _lastTabIndex = _tabController.index;
         setState(() {});
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // If home screen set a pending order to open, handle it after first frame.
+    final pendingId = ref.read(pendingOrderDetailProvider);
+    if (pendingId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingOrder(pendingId));
+    }
+  }
+
+  void _openPendingOrder(String orderId) {
+    if (!mounted) return;
+    ref.read(pendingOrderDetailProvider.notifier).state = null;
+    final activeOrders = ref.read(activeOrdersProvider);
+    final order = activeOrders.cast<OrderModel?>().firstWhere(
+          (o) => o?.id == orderId,
+          orElse: () => null,
+        );
+    if (order == null) return;
+    // Switch to Active tab.
+    _tabController.animateTo(0);
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ActiveDetailSheet(order: order),
+    );
   }
 
   @override
@@ -218,9 +250,16 @@ class _ActiveTab extends StatelessWidget {
 
   String _sectionLabel(OrderModel order) {
     return switch (order.status) {
-      OrderStatus.delivering => '🛵 On the Way',
+      OrderStatus.awaitingDriver => '🔎 Finding a Driver',
       OrderStatus.preparing => '🍳 Preparing',
-      OrderStatus.ready => '📦 Ready for Pickup',
+      OrderStatus.ready => order.deliveryType == DeliveryType.pickup
+          ? '📦 Ready for Pickup'
+          : '📦 Ready',
+      OrderStatus.driverArrived => '🛵 Driver At Restaurant',
+      OrderStatus.pickedUp => '📦 Picked Up by Driver',
+      OrderStatus.delivering => '🛵 Out for Delivery',
+      OrderStatus.arrived => '📍 Driver Has Arrived',
+      OrderStatus.delivered => '✅ Delivered',
       _ => '🧾 Order Placed',
     };
   }
@@ -252,6 +291,47 @@ class _ActiveOrderCard extends ConsumerWidget {
 
   const _ActiveOrderCard({required this.order});
 
+  void _showActiveDetail(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ActiveDetailSheet(order: order),
+    );
+  }
+
+  void _cancelOrder(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: const Text(
+            'Are you sure you want to cancel this order? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keep Order'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(ordersProvider.notifier).updateOrder(
+                    order.copyWith(
+                      status: OrderStatus.cancelled,
+                      cancelReason: 'Cancelled by customer',
+                    ),
+                  );
+              UniToast.show(context, 'Order cancelled');
+            },
+            child: const Text('Cancel Order',
+                style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -259,8 +339,11 @@ class _ActiveOrderCard extends ConsumerWidget {
     final textSecondary =
         isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     final isDelivering = order.status == OrderStatus.delivering;
+    final canCancel = order.status == OrderStatus.placed;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => _showActiveDetail(context, ref),
+      child: Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface3 : AppColors.lightSurface,
@@ -297,7 +380,7 @@ class _ActiveOrderCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ORDER #${order.id}',
+                      'ORDER ${order.orderNumber}',
                       style: AppTypography.label.copyWith(
                         color: Colors.white.withOpacity(0.65),
                         fontSize: 9,
@@ -453,7 +536,8 @@ class _ActiveOrderCard extends ConsumerWidget {
                 ],
               ),
             ),
-            // Track button
+            // Track button — delivery orders only
+            if (order.deliveryType == DeliveryType.delivery)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
               child: GestureDetector(
@@ -483,9 +567,9 @@ class _ActiveOrderCard extends ConsumerWidget {
               ),
             ),
           ] else ...[
-            // Preparing summary row
+            // Summary row
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -502,11 +586,426 @@ class _ActiveOrderCard extends ConsumerWidget {
                 ],
               ),
             ),
+            // Action buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'View Details',
+                      icon: Icons.info_outline_rounded,
+                      primary: false,
+                      onTap: () => _showActiveDetail(context, ref),
+                    ),
+                  ),
+                  if (canCancel) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ActionButton(
+                        label: 'Cancel',
+                        icon: Icons.close_rounded,
+                        primary: false,
+                        onTap: () => _cancelOrder(context, ref),
+                        danger: true,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ],
       ),
+      ),
     );
   }
+}
+
+// ───────────────────────── ACTIVE ORDER DETAIL SHEET ─────────────────────────
+
+class _ActiveDetailSheet extends ConsumerWidget {
+  final OrderModel order;
+
+  const _ActiveDetailSheet({required this.order});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final canCancel = order.status == OrderStatus.placed;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white24 : Colors.black12,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Order Details',
+                          style: AppTypography.heading.copyWith(
+                              color: textPrimary, fontSize: 18)),
+                      Text('${order.orderNumber} · ${order.restaurantName}',
+                          style: AppTypography.caption.copyWith(
+                              color: textMuted, fontSize: 10)),
+                    ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close_rounded, color: textMuted, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                children: [
+                  // Status banner
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: order.status == OrderStatus.delivering
+                            ? [AppColors.primary, AppColors.primaryDark]
+                            : [AppColors.accent, AppColors.accentDark],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _statusTitle(order.status),
+                                style: AppTypography.subheading.copyWith(
+                                    color: Colors.white, fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _statusSubtitle(order),
+                                style: AppTypography.caption.copyWith(
+                                    color: Colors.white70, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (order.estimatedDelivery != null)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('ETA',
+                                  style: AppTypography.caption.copyWith(
+                                      color: Colors.white60, fontSize: 9)),
+                              Text(
+                                '${order.estimatedDelivery!.difference(DateTime.now()).inMinutes.clamp(0, 99)} min',
+                                style: AppTypography.displayMedium.copyWith(
+                                    color: Colors.white, fontSize: 20),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Full timeline
+                  _ReceiptSection(
+                    title: 'Timeline',
+                    isDark: isDark,
+                    child: Column(
+                      children: order.timeline.map((step) {
+                        final isActive = step.isCurrent;
+                        final isDone = step.isComplete && !step.isCurrent;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: isDone || isActive
+                                      ? AppColors.primary
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                  border: isDone || isActive
+                                      ? null
+                                      : Border.all(
+                                          color: isDark
+                                              ? AppColors.darkBorder
+                                              : const Color(0xFFC8D8C8),
+                                          width: 2),
+                                ),
+                                alignment: Alignment.center,
+                                child: isDone
+                                    ? const Icon(Icons.check,
+                                        size: 11, color: Colors.white)
+                                    : isActive
+                                        ? Container(
+                                            width: 7,
+                                            height: 7,
+                                            decoration: const BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          )
+                                        : null,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                step.label,
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 12,
+                                  color: isActive
+                                      ? AppColors.primary
+                                      : isDone
+                                          ? textPrimary
+                                          : textMuted,
+                                  fontWeight: isActive
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Items
+                  _ReceiptSection(
+                    title: 'Your Order',
+                    isDark: isDark,
+                    child: Column(
+                      children: [
+                        ...order.items.map((ci) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(ci.item.name,
+                                        style: AppTypography.body.copyWith(
+                                            color: textPrimary, fontSize: 12)),
+                                  ),
+                                  Text('× ${ci.quantity}',
+                                      style: AppTypography.caption.copyWith(
+                                          color: textMuted, fontSize: 11)),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                      CurrencyFormatter.format(ci.total),
+                                      style: AppTypography.subheading.copyWith(
+                                          color: textPrimary, fontSize: 12)),
+                                ],
+                              ),
+                            )),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Divider(
+                              color: isDark
+                                  ? Colors.white12
+                                  : Colors.black12,
+                              height: 1),
+                        ),
+                        const SizedBox(height: 8),
+                        // Subtotal
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Subtotal',
+                                style: AppTypography.caption.copyWith(
+                                    color: textMuted, fontSize: 11)),
+                            Text(CurrencyFormatter.format(order.subtotal),
+                                style: AppTypography.caption.copyWith(
+                                    color: textMuted, fontSize: 11)),
+                          ],
+                        ),
+                        if (order.deliveryFee > 0) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Delivery fee',
+                                  style: AppTypography.caption.copyWith(
+                                      color: textMuted, fontSize: 11)),
+                              Text(CurrencyFormatter.format(order.deliveryFee),
+                                  style: AppTypography.caption.copyWith(
+                                      color: textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ],
+                        Builder(builder: (_) {
+                          final discount = order.subtotal + order.deliveryFee - order.total;
+                          if (discount <= 0.001) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Discount',
+                                    style: AppTypography.caption.copyWith(
+                                        color: AppColors.primary, fontSize: 11)),
+                                Text('- ${CurrencyFormatter.format(discount)}',
+                                    style: AppTypography.caption.copyWith(
+                                        color: AppColors.primary, fontSize: 11,
+                                        fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 6),
+                        Divider(
+                            color: isDark ? Colors.white12 : Colors.black12,
+                            height: 1),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Total',
+                                style: AppTypography.subheading.copyWith(
+                                    color: textPrimary, fontSize: 13)),
+                            Text(
+                                CurrencyFormatter.format(order.total),
+                                style: AppTypography.subheading.copyWith(
+                                    color: AppColors.primary, fontSize: 14)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Actions
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ActionButton(
+                          label: 'Help & Support',
+                          icon: Icons.headset_mic_outlined,
+                          primary: false,
+                          onTap: () {
+                            Navigator.pop(context);
+                            UniToast.show(context, 'Opening support…');
+                          },
+                        ),
+                      ),
+                      if (canCancel) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _ActionButton(
+                            label: 'Cancel Order',
+                            icon: Icons.close_rounded,
+                            primary: false,
+                            danger: true,
+                            onTap: () {
+                              Navigator.pop(context);
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Cancel Order?'),
+                                  content: const Text(
+                                      'Are you sure? This cannot be undone.'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Keep Order'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        ref
+                                            .read(ordersProvider.notifier)
+                                            .cancelOrder(order.id);
+                                        UniToast.show(
+                                            context, 'Order cancelled');
+                                      },
+                                      child: const Text('Cancel',
+                                          style:
+                                              TextStyle(color: Colors.red)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _statusTitle(OrderStatus status) => switch (status) {
+        OrderStatus.placed => 'Order Received',
+        OrderStatus.awaitingDriver => 'Finding a Driver',
+        OrderStatus.preparing => 'Being Prepared',
+        OrderStatus.ready => order.deliveryType == DeliveryType.pickup
+            ? 'Ready for Pickup'
+            : 'Ready — Driver Coming',
+        OrderStatus.driverArrived => 'Driver At Restaurant',
+        OrderStatus.pickedUp => 'Picked Up by Driver',
+        OrderStatus.delivering => 'Out for Delivery',
+        OrderStatus.arrived => 'Driver Has Arrived',
+        _ => 'Processing',
+      };
+
+  String _statusSubtitle(OrderModel o) => switch (o.status) {
+        OrderStatus.placed => 'Waiting for ${o.restaurantName} to accept',
+        OrderStatus.awaitingDriver => '${o.restaurantName} accepted — lining up a driver',
+        OrderStatus.preparing => '${o.restaurantName} is preparing your order',
+        OrderStatus.ready => o.deliveryType == DeliveryType.pickup
+            ? 'Head over to collect your order'
+            : 'Your driver is on the way to the restaurant',
+        OrderStatus.driverArrived => 'Your driver is at the restaurant, picking up your order',
+        OrderStatus.pickedUp => 'Your driver has your order',
+        OrderStatus.delivering => 'Your order is out for delivery',
+        OrderStatus.arrived => 'Your driver is outside',
+        _ => '',
+      };
 }
 
 class _CircleIconButton extends StatelessWidget {
@@ -556,7 +1055,6 @@ class _StepsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeIndex = steps.indexWhere((s) => !s.isComplete);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,6 +1063,7 @@ class _StepsRow extends StatelessWidget {
           final segIndex = i ~/ 2;
           final segDone = steps[segIndex].isComplete;
           return Expanded(
+            flex: 1,
             child: Container(
               margin: const EdgeInsets.only(bottom: 13),
               height: 2,
@@ -582,61 +1081,69 @@ class _StepsRow extends StatelessWidget {
 
         final index = i ~/ 2;
         final step = steps[index];
-        final isActive = index == activeIndex;
-        final isDone = step.isComplete;
+        final isActive = step.isCurrent;
+        final isDone = step.isComplete && !step.isCurrent;
 
-        return Column(
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: isDone || isActive ? AppColors.primary : Colors.transparent,
-                shape: BoxShape.circle,
-                border: isDone || isActive
-                    ? null
-                    : Border.all(
-                        color: isDark ? AppColors.darkBorder : const Color(0xFFC8D8C8),
-                        width: 2,
-                      ),
-                boxShadow: isActive
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.25),
-                          blurRadius: 0,
-                          spreadRadius: 3,
+        return Expanded(
+          flex: 3,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: isDone || isActive ? AppColors.primary : Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: isDone || isActive
+                      ? null
+                      : Border.all(
+                          color: isDark ? AppColors.darkBorder : const Color(0xFFC8D8C8),
+                          width: 2,
                         ),
-                      ]
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: isDone
-                  ? const Icon(Icons.check, size: 11, color: Colors.white)
-                  : isActive
-                      ? Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
+                  boxShadow: isActive
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.25),
+                            blurRadius: 0,
+                            spreadRadius: 3,
                           ),
-                        )
+                        ]
                       : null,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              step.label,
-              style: AppTypography.caption.copyWith(
-                fontSize: 8,
-                color: isActive
-                    ? AppColors.primary
-                    : isDone
-                        ? (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)
-                        : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                ),
+                alignment: Alignment.center,
+                child: isDone
+                    ? const Icon(Icons.check, size: 11, color: Colors.white)
+                    : isActive
+                        ? Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          )
+                        : null,
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                step.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption.copyWith(
+                  fontSize: 7.5,
+                  height: 1.1,
+                  color: isActive
+                      ? AppColors.primary
+                      : isDone
+                          ? (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)
+                          : (isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         );
       }),
     );
@@ -825,14 +1332,14 @@ class _CancelledTab extends StatelessWidget {
 
 // ───────────────────────── SHARED HISTORY CARD ─────────────────────────
 
-class _HistoryCard extends StatelessWidget {
+class _HistoryCard extends ConsumerWidget {
   final OrderModel order;
   final bool cancelled;
 
   const _HistoryCard({required this.order, required this.cancelled});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary =
@@ -864,7 +1371,7 @@ class _HistoryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '#${order.id} · $dateFormat',
+                    '${order.orderNumber} · $dateFormat',
                     style: AppTypography.label.copyWith(color: textMuted, fontSize: 9),
                   ),
                   const SizedBox(height: 2),
@@ -973,7 +1480,7 @@ class _HistoryCard extends StatelessWidget {
                   label: cancelled ? 'Try Again' : 'Reorder',
                   icon: Icons.replay_rounded,
                   primary: true,
-                  onTap: () => _reorder(context),
+                  onTap: () => _reorder(context, ref),
                 ),
               ),
               const SizedBox(width: 6),
@@ -992,8 +1499,8 @@ class _HistoryCard extends StatelessWidget {
     );
   }
 
-  void _reorder(BuildContext context) {
-    final cart = ProviderScope.containerOf(context).read(cartProvider.notifier);
+  void _reorder(BuildContext context, WidgetRef ref) {
+    final cart = ref.read(cartProvider.notifier);
     for (final ci in order.items) {
       for (var i = 0; i < ci.quantity; i++) {
         cart.addItem(ci.item, note: ci.note);
@@ -1005,6 +1512,7 @@ class _HistoryCard extends StatelessWidget {
   void _showDetails(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ReceiptSheet(order: order),
@@ -1074,7 +1582,7 @@ class _ReceiptSheet extends StatelessWidget {
                       ),
                       pw.SizedBox(height: 2),
                       pw.Text(
-                        '#${order.id}',
+                        '${order.orderNumber}',
                         style: const pw.TextStyle(color: const PdfColor.fromInt(0xCCFFFFFF), fontSize: 10),
                       ),
                     ],
@@ -1287,7 +1795,7 @@ class _ReceiptSheet extends StatelessWidget {
                         style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 18),
                       ),
                       Text(
-                        'Order #${order.id}',
+                        'Order ${order.orderNumber}',
                         style: AppTypography.caption.copyWith(color: textMuted, fontSize: 10),
                       ),
                     ],
@@ -1452,7 +1960,7 @@ class _ReceiptSheet extends StatelessWidget {
                       final file = await _buildReceiptPdf();
                       await Share.shareXFiles(
                         [XFile(file.path, mimeType: 'application/pdf')],
-                        subject: 'Uni Eats Receipt — Order #${order.id}',
+                        subject: 'Uni Eats Receipt — Order ${order.orderNumber}',
                       );
                     },
                     child: Container(
@@ -1571,6 +2079,7 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final IconData? icon;
   final bool primary;
+  final bool danger;
   final VoidCallback onTap;
 
   const _ActionButton({
@@ -1578,43 +2087,56 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.primary,
     required this.onTap,
+    this.danger = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textPrimary = Theme.of(context).colorScheme.onSurface;
+
+    final bgColor = primary
+        ? AppColors.primary
+        : danger
+            ? AppColors.danger.withOpacity(0.1)
+            : isDark
+                ? AppColors.darkSurface2
+                : AppColors.lightSurface2;
+
+    final fgColor = primary
+        ? Colors.white
+        : danger
+            ? AppColors.danger
+            : isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: primary
-              ? AppColors.primary
-              : isDark
-                  ? AppColors.darkSurface2
-                  : AppColors.lightSurface2,
+          color: bgColor,
           borderRadius: BorderRadius.circular(20),
           border: primary
               ? null
-              : Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+              : Border.all(
+                  color: danger
+                      ? AppColors.danger.withOpacity(0.3)
+                      : isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 12, color: primary ? Colors.white : textPrimary),
+              Icon(icon, size: 12, color: fgColor),
               const SizedBox(width: 5),
             ],
             Text(
               label,
               style: AppTypography.caption.copyWith(
-                color: primary
-                    ? Colors.white
-                    : isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
+                color: fgColor,
                 fontWeight: FontWeight.w700,
                 fontSize: 10,
               ),

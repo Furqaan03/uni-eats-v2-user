@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +11,9 @@ import '../../core/widgets/restaurant_list_tile.dart';
 import '../../core/widgets/search_bar.dart';
 import '../../core/widgets/section_header.dart';
 import '../../models/restaurant_model.dart';
+import '../../models/order_model.dart';
 import '../../services/mock_data_service.dart';
+import '../orders/providers/orders_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'widgets/campus_map_preview.dart';
@@ -102,6 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.read(notificationsProvider.notifier).markAllRead();
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -208,7 +211,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: 12),
                 WalletMiniCard(balance: balance),
-                const SizedBox(height: 6),
+                _ActiveOrdersBanner(
+                  orders: ref.watch(activeOrdersProvider),
+                  onOrderTap: (order) {
+                    ref.read(pendingOrderDetailProvider.notifier).state = order.id;
+                    context.go('/orders');
+                  },
+                ),
                 CategoryChips(
                   selected: _selectedCategory,
                   onSelected: (c) => setState(() => _selectedCategory = c),
@@ -363,7 +372,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<RestaurantModel> _applyFilter(List<RestaurantModel> restaurants) {
     switch (_selectedFilter) {
       case 'Nearest':
-        restaurants.sort((a, b) => a.deliveryTimeMin.compareTo(b.deliveryTimeMin));
+        final sorted = List<RestaurantModel>.of(restaurants)
+          ..sort((a, b) => a.deliveryTimeMin.compareTo(b.deliveryTimeMin));
+        return sorted;
       case 'Rating 4+':
         return restaurants.where((r) => r.rating >= 4.0).toList();
       case 'Under 10 min':
@@ -371,9 +382,315 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case 'Pickup Only':
         return restaurants.where((r) => r.offersPickup && !r.offersDelivery).toList();
       case 'Delivery Only':
-        return restaurants.where((r) => r.offersDelivery).toList();
+        return restaurants.where((r) => r.offersDelivery && !r.offersPickup).toList();
     }
     return restaurants;
+  }
+}
+
+// ── Active orders banner ───────────────────────────────────────────────────
+
+class _ActiveOrdersBanner extends StatelessWidget {
+  final List<OrderModel> orders;
+  final void Function(OrderModel order) onOrderTap;
+
+  const _ActiveOrdersBanner({required this.orders, required this.onOrderTap});
+
+  String _statusLabel(OrderModel o) => switch (o.status) {
+        OrderStatus.awaitingDriver => 'Finding a Driver',
+        OrderStatus.preparing => 'Preparing',
+        OrderStatus.ready => o.deliveryType == DeliveryType.pickup
+            ? 'Ready for Pickup'
+            : 'Ready',
+        OrderStatus.driverArrived => 'Driver At Restaurant',
+        OrderStatus.pickedUp => 'Picked Up by Driver',
+        OrderStatus.delivering => 'Out for Delivery',
+        OrderStatus.arrived => 'Driver Has Arrived',
+        _ => 'Order Placed',
+      };
+
+  String _statusEmoji(OrderModel o) => switch (o.status) {
+        OrderStatus.awaitingDriver => '🔎',
+        OrderStatus.preparing => '🍳',
+        OrderStatus.ready => '📦',
+        OrderStatus.driverArrived => '🛵',
+        OrderStatus.pickedUp => '✅',
+        OrderStatus.delivering => '🛵',
+        OrderStatus.arrived => '📍',
+        _ => '🧾',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    if (orders.isEmpty) return const SizedBox.shrink();
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '🛒 Active Orders',
+                style: AppTypography.subheading.copyWith(
+                  color: textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                '${orders.length} order${orders.length > 1 ? 's' : ''}',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 126,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              final order = orders[index];
+              final isDelivering = order.status == OrderStatus.delivering;
+              return GestureDetector(
+                onTap: () => onOrderTap(order),
+                child: Container(
+                  width: 230,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.25),
+                    ),
+                    boxShadow: isDark
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 8,
+                            ),
+                          ],
+                  ),
+                  child: Stack(
+                    children: [
+                      // Left accent bar
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 4,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: isDelivering
+                                  ? [AppColors.primary, AppColors.primaryDark]
+                                  : [AppColors.accent, AppColors.accentDark],
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(14),
+                              bottomLeft: Radius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    order.restaurantName,
+                                    style: AppTypography.subheading.copyWith(
+                                      color: textPrimary,
+                                      fontSize: 12,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    order.orderNumber,
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _MiniTimeline(order: order, isDark: isDark),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Text(
+                                  _statusEmoji(order),
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _statusLabel(order),
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 14,
+                                  color: AppColors.primary,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+}
+
+// ── Mini timeline for active order cards ──────────────────────────────────
+
+class _MiniTimeline extends StatelessWidget {
+  final OrderModel order;
+  final bool isDark;
+
+  const _MiniTimeline({required this.order, required this.isDark});
+
+  static const _pickupSteps = [
+    OrderStatus.placed,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+    OrderStatus.pickedUp,
+  ];
+
+  static const _deliverySteps = [
+    OrderStatus.placed,
+    OrderStatus.preparing,
+    OrderStatus.ready,
+    OrderStatus.delivering,
+    OrderStatus.delivered,
+  ];
+
+  static String _label(OrderStatus s, DeliveryType type) => switch (s) {
+        OrderStatus.placed => 'Placed',
+        OrderStatus.preparing => 'Prep',
+        OrderStatus.ready =>
+          type == DeliveryType.pickup ? 'Ready' : 'Ready',
+        OrderStatus.pickedUp => 'Picked Up',
+        OrderStatus.delivering => 'Out',
+        OrderStatus.delivered => 'Done',
+        _ => '',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = order.deliveryType == DeliveryType.pickup
+        ? _pickupSteps
+        : _deliverySteps;
+
+    // This mini timeline only shows the broad checkpoints — collapse the
+    // finer-grained statuses onto the nearest one so the dots don't go
+    // blank for a status that isn't itself a checkpoint.
+    final checkpointStatus = switch (order.status) {
+      OrderStatus.awaitingDriver => OrderStatus.placed,
+      OrderStatus.driverArrived => OrderStatus.ready,
+      OrderStatus.arrived => OrderStatus.delivering,
+      _ => order.status,
+    };
+    final currentIdx = steps.indexOf(checkpointStatus);
+
+    final doneColor = AppColors.primary;
+    final inactiveColor = isDark ? Colors.white24 : Colors.black12;
+    final lineHeight = 2.0;
+
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          // Connector line
+          final stepIdx = (i - 1) ~/ 2;
+          final filled = stepIdx < currentIdx;
+          return Expanded(
+            child: Container(
+              height: lineHeight,
+              color: filled ? doneColor : inactiveColor,
+            ),
+          );
+        }
+        final stepIdx = i ~/ 2;
+        final isDone = stepIdx < currentIdx;
+        final isCurrent = stepIdx == currentIdx;
+        final dotColor = isDone || isCurrent ? doneColor : inactiveColor;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+                border: isCurrent
+                    ? Border.all(color: doneColor.withOpacity(0.3), width: 2)
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _label(steps[stepIdx], order.deliveryType),
+              style: TextStyle(
+                fontSize: 7,
+                fontWeight:
+                    isCurrent ? FontWeight.w700 : FontWeight.w400,
+                color: isCurrent
+                    ? doneColor
+                    : isDone
+                        ? (isDark ? Colors.white70 : Colors.black54)
+                        : inactiveColor,
+              ),
+            ),
+          ],
+        );
+      }),
+    );
   }
 }
 

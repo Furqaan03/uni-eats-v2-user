@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/restaurant/providers/restaurant_status_provider.dart';
 import '../../models/restaurant_model.dart';
 import '../../utils/currency_formatter.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
-class RestaurantCard extends StatelessWidget {
+class RestaurantCard extends ConsumerWidget {
   final RestaurantModel restaurant;
   final VoidCallback? onTap;
   final double width;
@@ -18,10 +20,12 @@ class RestaurantCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final status = ref.watch(restaurantStatusProvider(restaurant.id)).valueOrNull ??
+        RestaurantStatus(isOpen: restaurant.isOpen, isBusy: restaurant.isBusy);
 
     return GestureDetector(
       onTap: onTap,
@@ -45,7 +49,7 @@ class RestaurantCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildImage(),
+            _buildImage(status),
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
@@ -112,8 +116,12 @@ class RestaurantCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImage() {
+  Widget _buildImage(RestaurantStatus status) {
     final gradientColors = _gradientForCategory(restaurant.category);
+    final String? badgeLabel = !status.isOpen ? 'CLOSED' : (status.isBusy ? 'BUSY' : 'OPEN');
+    final Color badgeColor = !status.isOpen
+        ? AppColors.danger
+        : (status.isBusy ? Colors.orange : AppColors.primary);
     return Container(
       height: 80,
       decoration: BoxDecoration(
@@ -125,18 +133,22 @@ class RestaurantCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (restaurant.isOpen)
+          if (!status.isOrderable)
+            Positioned.fill(
+              child: Container(color: Colors.black.withOpacity(0.45)),
+            ),
+          if (badgeLabel != null)
             Positioned(
               bottom: 6,
               left: 8,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'OPEN',
+                  badgeLabel,
                   style: AppTypography.label.copyWith(
                     color: Colors.white,
                     letterSpacing: 0.2,

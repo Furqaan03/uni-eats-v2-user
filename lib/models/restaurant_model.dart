@@ -13,6 +13,7 @@ class RestaurantModel {
   final double minOrder;
   final String? imageUrl;
   final bool isOpen;
+  final bool isBusy;
   final bool offersDelivery;
   final bool offersPickup;
   final double? discountPercent;
@@ -31,6 +32,7 @@ class RestaurantModel {
     required this.minOrder,
     this.imageUrl,
     this.isOpen = true,
+    this.isBusy = false,
     this.offersDelivery = true,
     this.offersPickup = true,
     this.discountPercent,
@@ -50,6 +52,7 @@ class RestaurantModel {
     double? minOrder,
     String? imageUrl,
     bool? isOpen,
+    bool? isBusy,
     bool? offersDelivery,
     bool? offersPickup,
     double? discountPercent,
@@ -68,6 +71,7 @@ class RestaurantModel {
       minOrder: minOrder ?? this.minOrder,
       imageUrl: imageUrl ?? this.imageUrl,
       isOpen: isOpen ?? this.isOpen,
+      isBusy: isBusy ?? this.isBusy,
       offersDelivery: offersDelivery ?? this.offersDelivery,
       offersPickup: offersPickup ?? this.offersPickup,
       discountPercent: discountPercent ?? this.discountPercent,
@@ -75,4 +79,8 @@ class RestaurantModel {
       campusY: campusY ?? this.campusY,
     );
   }
+
+  /// False if the restaurant is closed or has turned busy mode on — either
+  /// way it isn't currently accepting new orders.
+  bool get isOrderable => isOpen && !isBusy;
 }

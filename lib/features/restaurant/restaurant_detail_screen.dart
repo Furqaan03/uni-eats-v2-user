@@ -6,9 +6,12 @@ import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import '../../core/widgets/menu_item_card.dart';
 import '../../core/widgets/uni_toast.dart';
+import '../../models/cart_item_model.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
 import '../cart/providers/cart_provider.dart';
+import 'providers/menu_availability_provider.dart';
+import 'providers/restaurant_status_provider.dart';
 
 class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -24,6 +27,18 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
   bool _isFavorite = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Remember this restaurant so the Cart tab can offer a way back to it —
+    // `/cart` is a shell tab with no Navigator back-stack to pop to.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(lastViewedRestaurantProvider.notifier).state = widget.restaurantId;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
@@ -34,7 +49,17 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
       (r) => r.id == widget.restaurantId,
       orElse: () => MockDataService.restaurants.first,
     );
-    final menuItems = MockDataService.menuForRestaurant(restaurant.id);
+    final overridesAsync = ref.watch(menuItemOverridesProvider(restaurant.id));
+    final overrides = overridesAsync.valueOrNull ?? {};
+    final menuItems = MockDataService.menuForRestaurant(restaurant.id).map((item) {
+      final o = overrides[item.id];
+      if (o == null) return item;
+      return item.copyWith(
+        price: (o['price'] as num?)?.toDouble(),
+        discountPercent: (o['discountPercent'] as num?)?.toDouble(),
+        clearDiscount: o['discountPercent'] == null,
+      );
+    }).toList();
     final menuCategories = <String>{...menuItems.map((m) => m.category)}.toList();
     final chipCategories = ['All', ...menuCategories];
     final sections = _selectedCategory == 'All' ? menuCategories : [_selectedCategory];
@@ -42,6 +67,10 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
     final cart = ref.watch(cartProvider);
     final cartTotal = ref.watch(cartTotalProvider);
     final cartCount = ref.watch(cartItemCountProvider);
+    final availabilityAsync = ref.watch(menuAvailabilityProvider(restaurant.id));
+    final availability = availabilityAsync.valueOrNull ?? {};
+    final status = ref.watch(restaurantStatusProvider(restaurant.id)).valueOrNull ??
+        RestaurantStatus(isOpen: restaurant.isOpen, isBusy: restaurant.isBusy);
 
     return Scaffold(
       body: CustomScrollView(
@@ -112,11 +141,13 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: restaurant.isOpen ? AppColors.primary : AppColors.danger,
+                        color: !status.isOpen
+                            ? AppColors.danger
+                            : (status.isBusy ? Colors.orange : AppColors.primary),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        restaurant.isOpen ? 'OPEN NOW' : 'CLOSED',
+                        !status.isOpen ? 'CLOSED' : (status.isBusy ? 'BUSY' : 'OPEN NOW'),
                         style: AppTypography.label.copyWith(color: Colors.white, fontSize: 9),
                       ),
                     ),
@@ -289,6 +320,41 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
           SliverList(
             delegate: SliverChildListDelegate([
               const SizedBox(height: 6),
+              if (!status.isOrderable)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: (!status.isOpen ? AppColors.danger : Colors.orange).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: (!status.isOpen ? AppColors.danger : Colors.orange).withOpacity(0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          !status.isOpen ? Icons.storefront_outlined : Icons.timer_outlined,
+                          size: 18,
+                          color: !status.isOpen ? AppColors.danger : Colors.orange,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            !status.isOpen
+                                ? 'This restaurant is closed right now — ordering is unavailable.'
+                                : 'This restaurant is very busy right now and has paused new orders.',
+                            style: AppTypography.caption.copyWith(
+                              color: !status.isOpen ? AppColors.danger : Colors.orange,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               for (var s = 0; s < sections.length; s++) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
@@ -304,22 +370,27 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                 for (final item in menuItems.where((m) => m.category == sections[s]))
                   Builder(
                     builder: (context) {
-                      final cartItem = cart.cast<dynamic>().firstWhere(
-                        (c) => c!.item.id == item.id,
+                      final cartItem = cart.cast<CartItemModel?>().firstWhere(
+                        (c) => c?.item.id == item.id,
                         orElse: () => null,
                       );
+                      final baseAvailable = availability[item.id] ?? item.isAvailable;
+                      final canAdd = baseAvailable && status.isOrderable;
                       return MenuItemCard(
                         item: item,
                         quantity: cartItem?.quantity,
-                        onAdd: () {
-                          ref.read(cartProvider.notifier).addItem(item);
-                          UniToast.show(context, 'Added ${item.name}');
-                        },
-                        onRemove: () {
-                          if (cartItem != null) {
-                            ref.read(cartProvider.notifier).removeItem(cartItem.id);
-                          }
-                        },
+                        isAvailable: canAdd,
+                        onAdd: canAdd
+                            ? () {
+                                ref.read(cartProvider.notifier).addItem(item);
+                                UniToast.show(context, 'Added ${item.name}');
+                              }
+                            : null,
+                        onRemove: cartItem != null
+                            ? () {
+                                ref.read(cartProvider.notifier).removeItem(cartItem.id);
+                              }
+                            : null,
                       );
                     },
                   ),

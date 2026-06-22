@@ -30,5 +30,5 @@ class CartItemModel {
     );
   }
 
-  double get total => item.price * quantity;
+  double get total => item.effectivePrice * quantity;
 }

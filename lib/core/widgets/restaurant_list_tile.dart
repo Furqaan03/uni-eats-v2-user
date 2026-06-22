@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/restaurant/providers/restaurant_status_provider.dart';
 import '../../models/restaurant_model.dart';
-import '../../utils/currency_formatter.dart';
 import '../theme/colors.dart';
 import '../theme/typography.dart';
 
-class RestaurantListTile extends StatelessWidget {
+class RestaurantListTile extends ConsumerWidget {
   final RestaurantModel restaurant;
   final VoidCallback? onTap;
 
@@ -16,11 +17,13 @@ class RestaurantListTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     final mutedColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final status = ref.watch(restaurantStatusProvider(restaurant.id)).valueOrNull ??
+        RestaurantStatus(isOpen: restaurant.isOpen, isBusy: restaurant.isBusy);
 
     return GestureDetector(
       onTap: onTap,
@@ -42,7 +45,7 @@ class RestaurantListTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _buildThumbnail(),
+            _buildThumbnail(status),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -68,6 +71,10 @@ class RestaurantListTile extends StatelessWidget {
                   Wrap(
                     spacing: 6,
                     children: [
+                      if (!status.isOpen)
+                        _Badge(label: 'Closed', color: AppColors.danger)
+                      else if (status.isBusy)
+                        _Badge(label: 'Busy', color: Colors.orange),
                       if (restaurant.offersDelivery) _Badge(label: 'Delivery'),
                       if (restaurant.offersPickup) _Badge(label: 'Pickup'),
                     ],
@@ -110,7 +117,7 @@ class RestaurantListTile extends StatelessWidget {
     );
   }
 
-  Widget _buildThumbnail() {
+  Widget _buildThumbnail(RestaurantStatus status) {
     final gradientColors = _gradientForCategory(restaurant.category);
     return Container(
       width: 58,
@@ -123,6 +130,14 @@ class RestaurantListTile extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(10),
       ),
+      child: !status.isOrderable
+          ? Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            )
+          : null,
     );
   }
 
@@ -145,12 +160,31 @@ class RestaurantListTile extends StatelessWidget {
 
 class _Badge extends StatelessWidget {
   final String label;
+  final Color? color;
 
-  const _Badge({required this.label});
+  const _Badge({required this.label, this.color});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (color != null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color!.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.label.copyWith(
+            color: color,
+            fontSize: 7,
+            letterSpacing: 0,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(

@@ -11,6 +11,7 @@ import 'features/home/home_screen.dart';
 import 'features/orders/orders_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/restaurant/restaurant_detail_screen.dart';
+import 'features/splash/splash_screen.dart';
 import 'features/tracking/tracking_screen.dart';
 import 'features/wallet/wallet_screen.dart';
 import 'shell/dashboard_shell.dart';
@@ -22,12 +23,21 @@ import 'shell/dashboard_shell.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final rootNavigatorKey = GlobalKey<NavigatorState>();
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
+  final isLoading = ref.watch(authLoadingProvider);
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
-    initialLocation: '/home',
+    initialLocation: '/splash',
     // Auth guard — redirect unauthenticated users to /login.
     redirect: (context, state) {
+      // Still restoring the session — park on /splash so we never flash
+      // /login for someone who's actually already signed in.
+      if (isLoading) {
+        return state.matchedLocation == '/splash' ? null : '/splash';
+      }
+      if (state.matchedLocation == '/splash') {
+        return isAuthenticated ? '/home' : '/login';
+      }
       const publicRoutes = {'/login', '/signup'};
       final isPublic = publicRoutes.contains(state.matchedLocation);
       if (!isAuthenticated && !isPublic) return '/login';
@@ -36,6 +46,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const SplashScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return DashboardShell(navigationShell: navigationShell);

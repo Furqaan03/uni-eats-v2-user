@@ -13,18 +13,15 @@ import '../models/wallet_transaction_model.dart';
 class MockDataService {
   MockDataService._();
 
-  // TODO: Replace with authenticated user from Firebase Auth in production.
-  // No real PII here — all values are fictional placeholders.
-  static final UserModel currentUser = UserModel(
-    id: 'u001',
-    name: 'Ahmed',
-    email: 'ahmed@udst.edu.qa',
-    phone: '+974 XXXX XXXX',
-    universityId: '00000000',
+  // Replaced with the real authenticated user's profile once Firebase Auth
+  // confirms a session (see AuthNotifier). This placeholder is only ever
+  // visible for the brief moment before auth state resolves.
+  static UserModel currentUser = const UserModel(
+    id: '',
+    name: '',
+    email: '',
+    universityId: '',
     role: UserRole.student,
-    walletBalance: 47.50,
-    loyaltyPoints: 1240,
-    dietaryPreferences: ['Vegetarian', 'No Nuts'],
   );
 
   static final List<RestaurantModel> restaurants = [
@@ -41,7 +38,6 @@ class MockDataService {
       isOpen: true,
       offersDelivery: true,
       offersPickup: true,
-      discountPercent: 30.0,
       campusX: 0.18,
       campusY: 0.22,
     ),
@@ -164,236 +160,116 @@ class MockDataService {
   }
 
   static final List<MenuItemModel> _menuItems = [
-    // Tim Hortons
-    const MenuItemModel(
-      id: 'm001',
-      restaurantId: 'r001',
-      name: 'Original Blend Coffee',
-      description: 'Medium roast, freshly brewed',
-      price: 10.50,
-      category: 'Coffee',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm002',
-      restaurantId: 'r001',
-      name: 'Iced Capp',
-      description: 'Creamy blended iced coffee',
-      price: 14.00,
-      category: 'Cold Drinks',
-      isPopular: true,
-    ),
-    const MenuItemModel(
-      id: 'm003',
-      restaurantId: 'r001',
-      name: 'Boston Cream Donut',
-      description: 'Custard filled with chocolate glaze',
-      price: 7.00,
-      category: 'Bakery',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm004',
-      restaurantId: 'r001',
-      name: 'Timbits (10 Pack)',
-      description: 'Assorted bite-sized donuts',
-      price: 12.00,
-      category: 'Bakery',
-    ),
-    const MenuItemModel(
-      id: 'm020',
-      restaurantId: 'r001',
-      name: 'Double Double',
-      description: 'Classic coffee with double cream & double sugar',
-      price: 12.00,
-      category: 'Coffee',
-      isPopular: true,
-    ),
-    const MenuItemModel(
-      id: 'm021',
-      restaurantId: 'r001',
-      name: 'Steeped Tea',
-      description: 'Freshly brewed premium black tea',
-      price: 18.00,
-      category: 'Drinks',
-    ),
-    // Oakberry
-    const MenuItemModel(
-      id: 'm005',
-      restaurantId: 'r002',
-      name: 'Original Açaí Bowl',
-      description: 'Açaí, granola, banana & honey',
-      price: 28.00,
-      category: 'Bowls',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm006',
-      restaurantId: 'r002',
-      name: 'Protein Açaí Bowl',
-      description: 'Açaí with protein & mixed berries',
-      price: 32.00,
-      category: 'Bowls',
-      isPopular: true,
-    ),
-    const MenuItemModel(
-      id: 'm007',
-      restaurantId: 'r002',
-      name: 'Green Detox Smoothie',
-      description: 'Spinach, apple, ginger & lemon',
-      price: 22.00,
-      category: 'Drinks',
-    ),
-    // Edge Cafe
-    const MenuItemModel(
-      id: 'm008',
-      restaurantId: 'r003',
-      name: 'Spanish Latte',
-      description: 'Espresso with sweet condensed milk',
-      price: 18.00,
-      category: 'Coffee',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm009',
-      restaurantId: 'r003',
-      name: 'Avocado Toast',
-      description: 'Sourdough, avocado, poached egg',
-      price: 24.00,
-      category: 'Food',
-      isNew: true,
-    ),
-    const MenuItemModel(
-      id: 'm010',
-      restaurantId: 'r003',
-      name: 'Croissant',
-      description: 'Butter croissant, freshly baked',
-      price: 9.00,
-      category: 'Bakery',
-    ),
-    const MenuItemModel(
-      id: 'm022',
-      restaurantId: 'r003',
-      name: 'Iced Latte',
-      description: 'Espresso with cold milk over ice',
-      price: 19.00,
-      category: 'Cold Drinks',
-      isPopular: true,
-    ),
-    // Caribou Coffee
-    const MenuItemModel(
-      id: 'm011',
-      restaurantId: 'r004',
-      name: 'Campfire Mocha',
-      description: 'Chocolate, espresso & toasted marshmallow',
-      price: 20.00,
-      category: 'Coffee',
-      isPopular: true,
-    ),
-    const MenuItemModel(
-      id: 'm012',
-      restaurantId: 'r004',
-      name: 'Iced Cold Press',
-      description: 'Slow-steeped cold brew',
-      price: 16.00,
-      category: 'Cold Drinks',
-    ),
-    const MenuItemModel(
-      id: 'm023',
-      restaurantId: 'r004',
-      name: 'Caramel Macchiato',
-      description: 'Espresso, vanilla & caramel drizzle',
-      price: 22.00,
-      category: 'Coffee',
-      isBestseller: true,
-    ),
-    // JamKai
-    const MenuItemModel(
-      id: 'm013',
-      restaurantId: 'r005',
-      name: 'Teriyaki Chicken Bowl',
-      description: 'Rice, teriyaki chicken & veggies',
-      price: 26.00,
-      category: 'Bowls',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm014',
-      restaurantId: 'r005',
-      name: 'Ramen Noodles',
-      description: 'Miso broth, noodles, egg & corn',
-      price: 30.00,
-      category: 'Noodles',
-    ),
-    const MenuItemModel(
-      id: 'm015',
-      restaurantId: 'r005',
-      name: 'Bubble Tea',
-      description: 'Milk tea with tapioca pearls',
-      price: 16.00,
-      category: 'Drinks',
-      isPopular: true,
-    ),
-    // Bold Café
-    const MenuItemModel(
-      id: 'm016',
-      restaurantId: 'r006',
-      name: 'Chicken Panini',
-      description: 'Grilled chicken, mozzarella & pesto',
-      price: 22.00,
-      category: 'Food',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm017',
-      restaurantId: 'r006',
-      name: 'Caesar Salad',
-      description: 'Romaine, croutons & parmesan',
-      price: 19.00,
-      category: 'Healthy',
-    ),
-    // L'Hardy
-    const MenuItemModel(
-      id: 'm018',
-      restaurantId: 'r007',
-      name: 'Machboos',
-      description: 'Traditional spiced rice with chicken',
-      price: 35.00,
-      category: 'Mains',
-      isBestseller: true,
-    ),
-    const MenuItemModel(
-      id: 'm019',
-      restaurantId: 'r007',
-      name: 'Harees',
-      description: 'Wheat & meat porridge',
-      price: 28.00,
-      category: 'Mains',
-    ),
+    // ── Tim Hortons (r001) ────────────────────────────────────────────────
+    const MenuItemModel(id: 'r001_m01', restaurantId: 'r001', name: 'Original Blend Coffee', description: 'Freshly brewed medium-roast blend, served hot', price: 10.50, category: 'Coffee', isBestseller: true),
+    const MenuItemModel(id: 'r001_m02', restaurantId: 'r001', name: 'Double Double', description: 'Classic coffee with two creams and two sugars', price: 12.00, category: 'Coffee', isBestseller: true, isPopular: true),
+    const MenuItemModel(id: 'r001_m03', restaurantId: 'r001', name: 'French Vanilla Cappuccino', description: 'Smooth espresso blended with sweet French vanilla', price: 15.00, category: 'Coffee'),
+    const MenuItemModel(id: 'r001_m04', restaurantId: 'r001', name: 'Iced Capp', description: 'Creamy blended iced coffee — refreshingly thick', price: 16.00, category: 'Cold Drinks', isPopular: true),
+    const MenuItemModel(id: 'r001_m05', restaurantId: 'r001', name: 'Steeped Tea', description: 'Premium black tea steeped fresh, served hot or iced', price: 10.00, category: 'Drinks'),
+    const MenuItemModel(id: 'r001_m06', restaurantId: 'r001', name: 'Boston Cream Donut', description: 'Yeast donut filled with vanilla custard, dipped in chocolate glaze', price: 7.00, category: 'Bakery', isBestseller: true),
+    const MenuItemModel(id: 'r001_m07', restaurantId: 'r001', name: 'Honey Glazed Donut', description: 'Classic ring donut with a sweet honey glaze', price: 6.00, category: 'Bakery'),
+    const MenuItemModel(id: 'r001_m08', restaurantId: 'r001', name: 'Chocolate Glazed Donut', description: 'Yeast donut topped with rich chocolate glaze', price: 6.00, category: 'Bakery'),
+    const MenuItemModel(id: 'r001_m09', restaurantId: 'r001', name: 'Timbits (10 Pack)', description: 'Ten bite-sized assorted donut holes — glazed, chocolate & honey', price: 12.00, category: 'Bakery'),
+    const MenuItemModel(id: 'r001_m10', restaurantId: 'r001', name: 'Turkey BLT Sandwich', description: 'Sliced turkey, bacon, lettuce & tomato on a toasted bagel', price: 25.00, category: 'Food'),
+    const MenuItemModel(id: 'r001_m11', restaurantId: 'r001', name: 'Grilled Chicken Wrap', description: 'Herb-marinated chicken, lettuce, tomato & ranch sauce in a flour tortilla', price: 28.00, category: 'Food', isNew: true),
+    const MenuItemModel(id: 'r001_m12', restaurantId: 'r001', name: 'Blueberry Muffin', description: 'Freshly baked, loaded with blueberries', price: 9.00, category: 'Bakery'),
+
+    // ── Oakberry (r002) ───────────────────────────────────────────────────
+    const MenuItemModel(id: 'r002_m01', restaurantId: 'r002', name: 'Original Açaí Bowl', description: 'Blended açaí, granola, sliced banana & drizzle of honey', price: 28.00, category: 'Bowls', isBestseller: true),
+    const MenuItemModel(id: 'r002_m02', restaurantId: 'r002', name: 'Protein Power Bowl', description: 'Açaí blended with whey protein, granola, banana & mixed berries', price: 34.00, category: 'Bowls', isPopular: true),
+    const MenuItemModel(id: 'r002_m03', restaurantId: 'r002', name: 'Tropical Açaí Bowl', description: 'Açaí, mango chunks, pineapple, coconut flakes & granola', price: 30.00, category: 'Bowls'),
+    const MenuItemModel(id: 'r002_m04', restaurantId: 'r002', name: 'Mango Pitaya Bowl', description: 'Dragon fruit & mango blend, kiwi, granola & chia seeds', price: 32.00, category: 'Bowls', isNew: true),
+    const MenuItemModel(id: 'r002_m05', restaurantId: 'r002', name: 'Green Detox Smoothie', description: 'Spinach, green apple, cucumber, ginger & lemon juice', price: 22.00, category: 'Drinks'),
+    const MenuItemModel(id: 'r002_m06', restaurantId: 'r002', name: 'Mixed Berry Smoothie', description: 'Strawberry, blueberry & raspberry blended with coconut water', price: 22.00, category: 'Drinks', isPopular: true),
+    const MenuItemModel(id: 'r002_m07', restaurantId: 'r002', name: 'Granola Pot', description: 'Layers of Greek yoghurt, crunchy granola & fresh berries', price: 16.00, category: 'Snacks'),
+    const MenuItemModel(id: 'r002_m08', restaurantId: 'r002', name: 'Guaraná Soda', description: 'Brazilian guaraná-flavoured sparkling drink, 330 ml', price: 9.00, category: 'Drinks'),
+
+    // ── Edge Cafe (r003) ──────────────────────────────────────────────────
+    const MenuItemModel(id: 'r003_m01', restaurantId: 'r003', name: 'Spanish Latte', description: 'Double espresso poured over sweet condensed milk & fresh milk', price: 18.00, category: 'Coffee', isBestseller: true),
+    const MenuItemModel(id: 'r003_m02', restaurantId: 'r003', name: 'Flat White', description: 'Double ristretto with velvety steamed microfoam', price: 16.00, category: 'Coffee'),
+    const MenuItemModel(id: 'r003_m03', restaurantId: 'r003', name: 'Iced Matcha Latte', description: 'Premium Japanese matcha whisked with oat milk over ice', price: 20.00, category: 'Cold Drinks', isNew: true),
+    const MenuItemModel(id: 'r003_m04', restaurantId: 'r003', name: 'Iced Latte', description: 'Double espresso over ice with cold full-cream milk', price: 19.00, category: 'Cold Drinks', isPopular: true),
+    const MenuItemModel(id: 'r003_m05', restaurantId: 'r003', name: 'Cappuccino', description: 'Classic espresso with rich steamed foam', price: 15.00, category: 'Coffee'),
+    const MenuItemModel(id: 'r003_m06', restaurantId: 'r003', name: 'Avocado Toast', description: 'Smashed avocado on sourdough, topped with a poached egg & chilli flakes', price: 24.00, category: 'Food'),
+    const MenuItemModel(id: 'r003_m07', restaurantId: 'r003', name: 'Butter Croissant', description: 'Freshly baked, flaky all-butter pastry', price: 9.00, category: 'Bakery'),
+    const MenuItemModel(id: 'r003_m08', restaurantId: 'r003', name: 'Club Sandwich', description: 'Triple-decker with chicken, turkey, lettuce, tomato & mayo on toast', price: 26.00, category: 'Food', isPopular: true),
+    const MenuItemModel(id: 'r003_m09', restaurantId: 'r003', name: 'Granola Bowl', description: 'Yoghurt base with mixed berries, honey & crunchy granola', price: 18.00, category: 'Food'),
+
+    // ── Caribou Coffee (r004) ─────────────────────────────────────────────
+    const MenuItemModel(id: 'r004_m01', restaurantId: 'r004', name: 'Campfire Mocha', description: 'Espresso, dark chocolate & toasted marshmallow syrup with steamed milk', price: 20.00, category: 'Coffee', isBestseller: true),
+    const MenuItemModel(id: 'r004_m02', restaurantId: 'r004', name: 'Caramel Macchiato', description: 'Vanilla-sweetened espresso with caramel drizzle & steamed milk', price: 22.00, category: 'Coffee', isPopular: true),
+    const MenuItemModel(id: 'r004_m03', restaurantId: 'r004', name: 'Iced Cold Press', description: 'Slow-steeped cold brew, bold & smooth over ice', price: 16.00, category: 'Cold Drinks'),
+    const MenuItemModel(id: 'r004_m04', restaurantId: 'r004', name: 'White Chocolate Mocha', description: 'Espresso with white chocolate sauce & velvety steamed milk', price: 21.00, category: 'Coffee'),
+    const MenuItemModel(id: 'r004_m05', restaurantId: 'r004', name: 'Snickerdoodle Latte', description: 'Espresso with cinnamon-vanilla syrup & steamed milk', price: 22.00, category: 'Coffee', isNew: true),
+    const MenuItemModel(id: 'r004_m06', restaurantId: 'r004', name: 'Chai Tea Latte', description: 'Spiced chai concentrate with steamed milk', price: 19.00, category: 'Drinks'),
+    const MenuItemModel(id: 'r004_m07', restaurantId: 'r004', name: 'Blueberry Muffin', description: 'Moist muffin bursting with blueberries', price: 12.00, category: 'Bakery'),
+    const MenuItemModel(id: 'r004_m08', restaurantId: 'r004', name: 'Chocolate Chip Cookie', description: 'Freshly baked, chewy with premium chocolate chips', price: 8.00, category: 'Bakery'),
+
+    // ── JamKai (r005) ─────────────────────────────────────────────────────
+    const MenuItemModel(id: 'r005_m01', restaurantId: 'r005', name: 'Teriyaki Chicken Bowl', description: 'Grilled teriyaki chicken over steamed rice with mixed vegetables & sesame', price: 26.00, category: 'Bowls', isBestseller: true),
+    const MenuItemModel(id: 'r005_m02', restaurantId: 'r005', name: 'Crispy Gyoza (6 pcs)', description: 'Pan-fried pork & cabbage dumplings with ponzu dipping sauce', price: 18.00, category: 'Starters', isPopular: true),
+    const MenuItemModel(id: 'r005_m03', restaurantId: 'r005', name: 'Ramen Noodles', description: 'Rich miso broth with noodles, soft-boiled egg, sweetcorn & nori', price: 30.00, category: 'Noodles'),
+    const MenuItemModel(id: 'r005_m04', restaurantId: 'r005', name: 'Pad Thai', description: 'Stir-fried rice noodles with egg, bean sprouts, peanuts & tamarind sauce', price: 28.00, category: 'Noodles'),
+    const MenuItemModel(id: 'r005_m05', restaurantId: 'r005', name: 'Edamame', description: 'Salted steamed soybeans — light & protein-packed', price: 12.00, category: 'Starters'),
+    const MenuItemModel(id: 'r005_m06', restaurantId: 'r005', name: 'Bubble Tea — Brown Sugar', description: 'Fresh milk with brown sugar syrup & chewy tapioca pearls', price: 16.00, category: 'Drinks', isPopular: true),
+    const MenuItemModel(id: 'r005_m07', restaurantId: 'r005', name: 'Bubble Tea — Taro', description: 'Creamy taro milk tea with tapioca pearls', price: 16.00, category: 'Drinks', isNew: true),
+    const MenuItemModel(id: 'r005_m08', restaurantId: 'r005', name: 'Tom Yum Soup', description: 'Spicy & sour Thai broth with shrimp, mushrooms & lemongrass', price: 22.00, category: 'Starters'),
+    const MenuItemModel(id: 'r005_m09', restaurantId: 'r005', name: 'Spring Rolls (4 pcs)', description: 'Crispy vegetable spring rolls with sweet chilli dipping sauce', price: 15.00, category: 'Starters'),
+
+    // ── Bold Café (r006) ──────────────────────────────────────────────────
+    const MenuItemModel(id: 'r006_m01', restaurantId: 'r006', name: 'Chicken Panini', description: 'Grilled chicken breast, mozzarella, sun-dried tomato pesto — pressed hot', price: 22.00, category: 'Food', isBestseller: true),
+    const MenuItemModel(id: 'r006_m02', restaurantId: 'r006', name: 'Club Sandwich', description: 'Triple-decker with turkey, bacon, egg, lettuce, tomato & mayo', price: 24.00, category: 'Food', isPopular: true),
+    const MenuItemModel(id: 'r006_m03', restaurantId: 'r006', name: 'Caesar Salad', description: 'Romaine hearts, parmesan, croutons & bold Caesar dressing', price: 19.00, category: 'Healthy'),
+    const MenuItemModel(id: 'r006_m04', restaurantId: 'r006', name: 'Crispy Beef Wrap', description: 'Seasoned beef strips, caramelised onion & garlic aioli in a warm tortilla', price: 26.00, category: 'Food'),
+    const MenuItemModel(id: 'r006_m05', restaurantId: 'r006', name: 'Latte', description: 'Double espresso with silky steamed milk', price: 16.00, category: 'Coffee'),
+    const MenuItemModel(id: 'r006_m06', restaurantId: 'r006', name: 'Iced Americano', description: 'Double espresso over ice with cold water', price: 14.00, category: 'Cold Drinks'),
+    const MenuItemModel(id: 'r006_m07', restaurantId: 'r006', name: 'Cheesecake Slice', description: 'New York-style baked cheesecake on a graham cracker base', price: 18.00, category: 'Desserts', isPopular: true),
+    const MenuItemModel(id: 'r006_m08', restaurantId: 'r006', name: 'Fresh Fruit Salad', description: 'Seasonal mixed fruits with a light honey-mint dressing', price: 15.00, category: 'Healthy'),
+
+    // ── L'Hardy (r007) ────────────────────────────────────────────────────
+    const MenuItemModel(id: 'r007_m01', restaurantId: 'r007', name: 'Machboos Dajaj', description: 'Traditional spiced basmati rice slow-cooked with tender chicken, dried lemon & rose water', price: 35.00, category: 'Mains', isBestseller: true),
+    const MenuItemModel(id: 'r007_m02', restaurantId: 'r007', name: 'Machboos Laham', description: 'Fragrant spiced rice with slow-cooked lamb, baharat & caramelised onions', price: 45.00, category: 'Mains'),
+    const MenuItemModel(id: 'r007_m03', restaurantId: 'r007', name: 'Harees', description: 'Slow-cooked cracked wheat & tender lamb blended to a creamy porridge', price: 28.00, category: 'Mains'),
+    const MenuItemModel(id: 'r007_m04', restaurantId: 'r007', name: 'Thareed', description: 'Layered Qatari bread soaked in rich lamb & vegetable stew', price: 30.00, category: 'Mains'),
+    const MenuItemModel(id: 'r007_m05', restaurantId: 'r007', name: 'Balaleet', description: 'Sweet saffron vermicelli with a savoury egg omelette — a classic Qatari breakfast', price: 18.00, category: 'Starters', isNew: true),
+    const MenuItemModel(id: 'r007_m06', restaurantId: 'r007', name: 'Luqaimat (10 pcs)', description: 'Deep-fried dough balls drizzled with date syrup & sesame seeds', price: 15.00, category: 'Desserts', isPopular: true),
+    const MenuItemModel(id: 'r007_m07', restaurantId: 'r007', name: 'Chai Karak', description: 'Strong milky spiced tea brewed with cardamom, saffron & evaporated milk', price: 8.00, category: 'Drinks', isBestseller: true),
+    const MenuItemModel(id: 'r007_m08', restaurantId: 'r007', name: 'Dates & Cream', description: 'Medjool dates served with whipped cream & crushed pistachios', price: 22.00, category: 'Desserts'),
+
+    // ── Ennabi 92 (r008) ──────────────────────────────────────────────────
+    const MenuItemModel(id: 'r008_m01', restaurantId: 'r008', name: 'Machboos Dajaj', description: 'Ennabi-style spiced rice with juicy chicken, dried lime & mixed spices', price: 35.00, category: 'Mains', isBestseller: true),
+    const MenuItemModel(id: 'r008_m02', restaurantId: 'r008', name: 'Jareesh', description: 'Crushed wheat cooked down with chicken broth, butter & fried onions', price: 30.00, category: 'Mains'),
+    const MenuItemModel(id: 'r008_m03', restaurantId: 'r008', name: 'Saloona Khadra', description: 'Hearty vegetable & chicken stew with tomatoes, turmeric & coriander', price: 28.00, category: 'Mains'),
+    const MenuItemModel(id: 'r008_m04', restaurantId: 'r008', name: 'Shakshuka', description: 'Eggs poached in spiced tomato & pepper sauce, served with khoubz', price: 24.00, category: 'Starters', isNew: true),
+    const MenuItemModel(id: 'r008_m05', restaurantId: 'r008', name: 'Foul Medames', description: 'Slow-cooked fava beans with lemon, cumin & olive oil, served with bread', price: 18.00, category: 'Starters'),
+    const MenuItemModel(id: 'r008_m06', restaurantId: 'r008', name: 'Samboosa (6 pcs)', description: 'Crispy pastry parcels filled with spiced minced meat & onion', price: 20.00, category: 'Starters', isPopular: true),
+    const MenuItemModel(id: 'r008_m07', restaurantId: 'r008', name: 'Chai Karak', description: "Ennabi's signature karak: strong, spiced & creamy", price: 8.00, category: 'Drinks', isBestseller: true),
+    const MenuItemModel(id: 'r008_m08', restaurantId: 'r008', name: 'Luqaimat (10 pcs)', description: 'Golden fried dough balls with date syrup & toasted sesame', price: 15.00, category: 'Desserts', isPopular: true),
   ];
 
   static final List<OrderModel> orders = [
     // Active — on the way (Tim Hortons)
     OrderModel(
       id: 'UE-4821',
+      orderNumber: '#D4821',
       userId: 'u001',
       restaurantId: 'r001',
       restaurantName: 'Tim Hortons',
       items: [
         CartItemModel(
           id: 'ci001',
-          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'm020'),
+          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'r001_m02'),
           quantity: 1,
         ),
         CartItemModel(
           id: 'ci002',
-          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'm002'),
+          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'r001_m04'),
           quantity: 1,
         ),
       ],
-      subtotal: 30.00,
+      subtotal: 28.00,
       deliveryFee: 0.0,
-      total: 30.00,
+      total: 28.00,
       status: OrderStatus.delivering,
       deliveryType: DeliveryType.delivery,
       driverName: 'Khalid Al-Mansouri',
@@ -410,19 +286,20 @@ class MockDataService {
     // Active — preparing (Oakberry)
     OrderModel(
       id: 'UE-4820',
+      orderNumber: '#P4820',
       userId: 'u001',
       restaurantId: 'r002',
       restaurantName: 'Oakberry',
       items: [
         CartItemModel(
           id: 'ci003',
-          item: menuForRestaurant('r002').firstWhere((m) => m.id == 'm005'),
+          item: menuForRestaurant('r002').firstWhere((m) => m.id == 'r002_m01'),
           quantity: 1,
         ),
       ],
-      subtotal: 32.00,
+      subtotal: 28.00,
       deliveryFee: 0.0,
-      total: 32.00,
+      total: 28.00,
       status: OrderStatus.preparing,
       deliveryType: DeliveryType.pickup,
       createdAt: DateTime.now().subtract(const Duration(minutes: 6)),
@@ -437,18 +314,19 @@ class MockDataService {
     // Past — Tim Hortons, rated
     OrderModel(
       id: 'UE-4819',
+      orderNumber: '#D4819',
       userId: 'u001',
       restaurantId: 'r001',
       restaurantName: 'Tim Hortons',
       items: [
         CartItemModel(
           id: 'ci004',
-          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'm020'),
+          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'r001_m02'),
           quantity: 1,
         ),
         CartItemModel(
           id: 'ci005',
-          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'm021'),
+          item: menuForRestaurant('r001').firstWhere((m) => m.id == 'r001_m05'),
           quantity: 1,
         ),
       ],
@@ -469,19 +347,20 @@ class MockDataService {
     // Past — Oakberry, not yet rated
     OrderModel(
       id: 'UE-4815',
+      orderNumber: '#D4815',
       userId: 'u001',
       restaurantId: 'r002',
       restaurantName: 'Oakberry',
       items: [
         CartItemModel(
           id: 'ci006',
-          item: menuForRestaurant('r002').firstWhere((m) => m.id == 'm005'),
+          item: menuForRestaurant('r002').firstWhere((m) => m.id == 'r002_m02'),
           quantity: 1,
         ),
       ],
-      subtotal: 32.00,
+      subtotal: 34.00,
       deliveryFee: 0.0,
-      total: 32.00,
+      total: 34.00,
       status: OrderStatus.delivered,
       deliveryType: DeliveryType.delivery,
       createdAt: DateTime(2026, 6, 13, 13, 10),
@@ -495,18 +374,19 @@ class MockDataService {
     // Past — Edge Cafe, rated
     OrderModel(
       id: 'UE-4810',
+      orderNumber: '#D4810',
       userId: 'u001',
       restaurantId: 'r003',
       restaurantName: 'Edge Cafe',
       items: [
         CartItemModel(
           id: 'ci007',
-          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'm022'),
+          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'r003_m04'),
           quantity: 1,
         ),
         CartItemModel(
           id: 'ci008',
-          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'm010'),
+          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'r003_m07'),
           quantity: 1,
         ),
       ],
@@ -527,19 +407,20 @@ class MockDataService {
     // Cancelled — refunded by restaurant
     OrderModel(
       id: 'UE-4811',
+      orderNumber: '#D4811',
       userId: 'u001',
       restaurantId: 'r003',
       restaurantName: 'Edge Cafe',
       items: [
         CartItemModel(
           id: 'ci009',
-          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'm022'),
+          item: menuForRestaurant('r003').firstWhere((m) => m.id == 'r003_m04'),
           quantity: 2,
         ),
       ],
-      subtotal: 36.00,
+      subtotal: 38.00,
       deliveryFee: 0.0,
-      total: 36.00,
+      total: 38.00,
       status: OrderStatus.cancelled,
       deliveryType: DeliveryType.delivery,
       createdAt: DateTime(2026, 6, 12),
@@ -549,13 +430,14 @@ class MockDataService {
     // Cancelled — by user
     OrderModel(
       id: 'UE-4803',
+      orderNumber: '#P4803',
       userId: 'u001',
       restaurantId: 'r004',
       restaurantName: 'Caribou Coffee',
       items: [
         CartItemModel(
           id: 'ci010',
-          item: menuForRestaurant('r004').firstWhere((m) => m.id == 'm023'),
+          item: menuForRestaurant('r004').firstWhere((m) => m.id == 'r004_m02'),
           quantity: 1,
         ),
       ],

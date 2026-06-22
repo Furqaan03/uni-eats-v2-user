@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum TransactionType { topUp, payment, refund }
+enum TransactionType { topUp, payment, refund, transferOut }
 
 @immutable
 class WalletTransactionModel {
@@ -43,4 +43,29 @@ class WalletTransactionModel {
   }
 
   bool get isCredit => type == TransactionType.topUp || type == TransactionType.refund;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'userId': userId,
+        'amount': amount,
+        'type': type.name,
+        'reference': reference,
+        'description': description,
+        'timestamp': timestamp.toIso8601String(),
+      };
+
+  factory WalletTransactionModel.fromMap(Map<String, dynamic> map) {
+    return WalletTransactionModel(
+      id: map['id'] as String,
+      userId: map['userId'] as String? ?? '',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0,
+      type: TransactionType.values.firstWhere(
+        (t) => t.name == map['type'],
+        orElse: () => TransactionType.payment,
+      ),
+      reference: map['reference'] as String?,
+      description: map['description'] as String?,
+      timestamp: DateTime.tryParse(map['timestamp'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
 }

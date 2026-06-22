@@ -64,6 +64,10 @@ class NotificationsNotifier extends StateNotifier<List<NotificationItem>> {
     state = updated;
   }
 
+  /// Fires once, immediately, at order placement. The rest of the order's
+  /// lifecycle (preparing/on the way/delivered) is now notified for real by
+  /// OrdersNotifier as it observes actual Firestore status changes — not on
+  /// a fixed timer that used to fire regardless of what was really happening.
   void scheduleOrderNotifications(String restaurantName) {
     addNotification(NotificationItem(
       emoji: '🛒',
@@ -71,42 +75,6 @@ class NotificationsNotifier extends StateNotifier<List<NotificationItem>> {
       subtitle: 'Your $restaurantName order is confirmed',
       route: '/orders',
     ));
-
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!mounted) return;
-      addNotification(NotificationItem(
-        emoji: '🍳',
-        title: 'Preparing Your Order',
-        subtitle: '$restaurantName is cooking your food',
-        route: '/orders',
-      ));
-    });
-
-    Future.delayed(const Duration(seconds: 12), () {
-      if (!mounted) return;
-      addNotification(NotificationItem(
-        emoji: '🚗',
-        title: 'Order On the Way!',
-        subtitle: 'Your $restaurantName order is heading to you',
-        route: '/tracking',
-      ));
-    });
-
-    Future.delayed(const Duration(seconds: 20), () {
-      if (!mounted) return;
-      addNotification(NotificationItem(
-        emoji: '✅',
-        title: 'Order Delivered!',
-        subtitle: 'Your $restaurantName order has arrived. Enjoy!',
-        route: '/orders',
-      ));
-      addNotification(NotificationItem(
-        emoji: '⭐',
-        title: 'Rate Your Order',
-        subtitle: 'How was $restaurantName? Tap to leave a review',
-        route: '/orders',
-      ));
-    });
   }
 }
 

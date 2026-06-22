@@ -64,13 +64,24 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
-    final order = MockDataService.orders.firstWhere(
-      (o) => o.status == OrderStatus.delivering,
-      orElse: () => MockDataService.orders.firstWhere(
-        (o) => o.isActive,
-        orElse: () => MockDataService.orders.first,
-      ),
-    );
+    if (MockDataService.orders.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            'No orders to track yet.',
+            style: AppTypography.body.copyWith(color: textSecondary),
+          ),
+        ),
+      );
+    }
+
+    final order = MockDataService.orders.cast<OrderModel?>().firstWhere(
+          (o) => o!.status == OrderStatus.delivering,
+          orElse: () => MockDataService.orders
+              .cast<OrderModel?>()
+              .firstWhere((o) => o!.isActive, orElse: () => null),
+        ) ??
+        MockDataService.orders.first;
 
     final isDelivering = order.status == OrderStatus.delivering;
 
@@ -144,10 +155,13 @@ class _TrackingTopBar extends StatelessWidget {
   String get _statusText {
     return switch (order.status) {
       OrderStatus.placed => 'Order confirmed...',
+      OrderStatus.awaitingDriver => 'Finding you a driver...',
       OrderStatus.preparing => 'Preparing your order...',
       OrderStatus.ready => 'Ready for pickup',
+      OrderStatus.driverArrived => 'Driver is at the restaurant...',
       OrderStatus.pickedUp => 'Picked up, on the way...',
       OrderStatus.delivering => '${order.driverName ?? 'Driver'} is on the way!',
+      OrderStatus.arrived => '${order.driverName ?? 'Driver'} has arrived!',
       OrderStatus.delivered => 'Delivered! Enjoy 🎉',
       OrderStatus.cancelled => 'Order cancelled',
     };
@@ -345,14 +359,21 @@ class _EtaCard extends StatelessWidget {
         label = 'Estimated preparation';
         time = '12 min';
         sub = 'Waiting for restaurant to confirm';
+      case OrderStatus.awaitingDriver:
+        emoji = '🔎';
+        label = 'Finding a driver';
+        time = '--';
+        sub = 'Restaurant accepted — lining up a driver';
       case OrderStatus.preparing:
       case OrderStatus.ready:
+      case OrderStatus.driverArrived:
         emoji = '🍳';
         label = 'Estimated arrival';
         time = '${remaining.clamp(1, 60)} min';
         sub = 'Your order is being prepared';
       case OrderStatus.pickedUp:
       case OrderStatus.delivering:
+      case OrderStatus.arrived:
         emoji = '🛵';
         label = 'Arriving in';
         time = '${remaining.clamp(1, 60)} min';
@@ -526,20 +547,28 @@ class _Timeline extends StatelessWidget {
     final steps = order.timeline;
     final activeIndex = order.isActive ? steps.indexWhere((s) => !s.isComplete) : -1;
 
-    final titles = ['Order Placed', 'Preparing', 'On the Way', 'Delivered'];
-    final subs = [
-      '${order.restaurantName} · ${CurrencyFormatter.format(order.total)}',
-      'Restaurant is making your order',
-      '${order.driverName ?? 'Delivery partner'} picked up your order',
-      'Enjoy your meal! 🎉',
-    ];
+    // Keyed by the step's own label (set in FirestoreOrderService._buildTimeline)
+    // rather than a fixed-length positional list — the delivery and pickup
+    // timelines have different step counts, so a hardcoded index list goes
+    // out of sync the moment either one changes.
+    final subtitleByLabel = <String, String>{
+      'Order Placed': '${order.restaurantName} · ${CurrencyFormatter.format(order.total)}',
+      'Finding a Driver': 'Lining up a driver for your order',
+      'Preparing': 'Restaurant is making your order',
+      'Ready for Pickup': 'Head over to collect your order',
+      'Driver Arrived': '${order.driverName ?? 'Your driver'} is at the restaurant',
+      'Picked Up': 'Your order has been collected',
+      'Out for Delivery': '${order.driverName ?? 'Your driver'} has your order and is on the way',
+      'Driver Has Arrived': '${order.driverName ?? 'Your driver'} is outside — head out to meet them',
+      'Delivered': 'Enjoy your meal! 🎉',
+    };
 
     return Column(
       children: [
-        for (var i = 0; i < steps.length && i < titles.length; i++)
+        for (var i = 0; i < steps.length; i++)
           _TimelineItem(
-            title: titles[i],
-            subtitle: subs[i],
+            title: steps[i].label,
+            subtitle: subtitleByLabel[steps[i].label] ?? '',
             time: DateFormat('h:mm a').format(order.createdAt.add(Duration(minutes: i * 6))),
             state: steps[i].isComplete
                 ? _TimelineState.done

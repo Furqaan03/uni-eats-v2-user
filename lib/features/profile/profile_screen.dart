@@ -1,13 +1,19 @@
+﻿import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import '../../core/widgets/theme_provider.dart';
 import '../../core/widgets/uni_toast.dart';
+import '../../features/auth/providers/auth_provider.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../wallet/providers/wallet_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -23,6 +29,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _notifDriver = true;
   bool _notifLoyalty = false;
   String _language = 'EN';
+  File? _avatarFile;
 
   final Set<String> _dietChips = {'Halal Only', 'Nut-free'};
 
@@ -46,301 +53,277 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final cardShadow = isDark
         ? null
         : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10)];
-    final user = MockDataService.currentUser;
+    final user = ref.watch(authProvider) ?? MockDataService.currentUser;
     final restaurants = MockDataService.restaurants;
+    final walletBalance = ref.watch(availableBalanceProvider);
 
     return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.only(bottom: 16),
-          children: [
-            // Profile hero
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-              child: Row(
-                children: [
-                  Stack(
+      body: ListView(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 80),
+        children: [
+            // ── Hero card ────────────────────────────────────────────────────
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // Green background — ends cleanly, no bottom padding for wallet
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 52, 20, 56),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+                    ),
+                  ),
+                  child: Column(
                     children: [
-                      Container(
-                        width: 62,
-                        height: 62,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [AppColors.primary, AppColors.primaryDark],
+                      // Avatar
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Outer ring (white outline like reference)
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white.withOpacity(0.55), width: 3),
+                              color: Colors.white.withOpacity(0.15),
+                            ),
+                            alignment: Alignment.center,
+                            child: Container(
+                              width: 88,
+                              height: 88,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: _avatarFile == null
+                                    ? const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [Color(0xFF80E080), Color(0xFF2E7D32)],
+                                      )
+                                    : null,
+                                image: _avatarFile != null
+                                    ? DecorationImage(
+                                        image: FileImage(_avatarFile!),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              alignment: Alignment.center,
+                              child: _avatarFile == null
+                                  ? Text(
+                                      _initials(user.name),
+                                      style: const TextStyle(
+                                        color: Color(0xFF1B5E20),
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    )
+                                  : null,
+                            ),
                           ),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary, width: 3),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                          style: AppTypography.displayMedium.copyWith(
-                            color: Colors.white,
-                            fontSize: 26,
+                          // Pencil button
+                          Positioned(
+                            bottom: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _showAvatarPicker(context),
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Name
+                      Text(
+                        user.name,
+                        style: AppTypography.displayMedium.copyWith(
+                          color: Colors.white,
+                          fontSize: 22,
                         ),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: const BoxDecoration(
-                            color: AppColors.accent,
-                            shape: BoxShape.circle,
+                      const SizedBox(height: 10),
+                      // Student info pills
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _HeroPill(
+                            icon: Icons.email_outlined,
+                            label: user.email,
                           ),
-                          alignment: Alignment.center,
-                          child: const Icon(Icons.edit, size: 10, color: Colors.white),
-                        ),
+                          const SizedBox(width: 8),
+                          _HeroPill(
+                            icon: Icons.school_outlined,
+                            label: 'Computer Science',
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.name,
-                          style: AppTypography.displayMedium.copyWith(
-                            color: textPrimary,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          user.email,
-                          style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 10),
-                        ),
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.25)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.school_outlined, size: 10, color: AppColors.primary),
-                              const SizedBox(width: 4),
-                              Text(
-                                'UDST Student · CS Dept',
-                                style: AppTypography.label.copyWith(
-                                  color: AppColors.primary,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                ),
+                // Decorative circles
+                Positioned(
+                  top: 20,
+                  right: -20,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () => UniToast.show(context, 'Profile editing coming soon!'),
+                ),
+                Positioned(
+                  top: 60,
+                  left: -30,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+                // Edit button top-right
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 12,
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: () => _showEditProfile(context),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white38),
                       ),
                       child: Text(
                         'Edit',
-                        style: AppTypography.label.copyWith(color: AppColors.primary, fontSize: 9),
+                        style: AppTypography.label.copyWith(color: Colors.white, fontSize: 12),
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // Student ID card
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? [const Color(0xFF1C3A1C), const Color(0xFF2A4A2A)]
-                      : [const Color(0xFFE8F5E8), const Color(0xFFD0ECD0)],
                 ),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.primary.withOpacity(0.25)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primary, AppColors.primaryDark],
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                      style: AppTypography.heading.copyWith(color: Colors.white, fontSize: 16),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.name,
-                          style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 11),
+                // Wallet card — straddles green/white boundary
+                Positioned(
+                  bottom: -52,
+                  left: 16,
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: () => context.push('/wallet'),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF00C853), Color(0xFF007A33)],
                         ),
-                        Text(
-                          'Student ID: ${user.universityId}',
-                          style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 9),
-                        ),
-                        Text(
-                          'Computer Science · Year 3',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 9,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryDark.withOpacity(0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            top: -20,
+                            right: -20,
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.06),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'UNI EATS WALLET',
+                                    style: AppTypography.label.copyWith(
+                                      color: Colors.white60,
+                                      fontSize: 10,
+                                      letterSpacing: 0.6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    CurrencyFormatter.compact(walletBalance),
+                                    style: AppTypography.displayMedium.copyWith(
+                                      color: Colors.white,
+                                      fontSize: 26,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '●●●● 4821 · Valid 12/27',
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white38,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => context.push('/wallet'),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.18),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        '+ TOP UP',
+                                        style: AppTypography.label.copyWith(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Icon(Icons.chevron_right, color: Colors.white54, size: 22),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _Barcode(color: AppColors.primary),
-                      const SizedBox(height: 2),
-                      Text(
-                        user.universityId,
-                        style: AppTypography.label.copyWith(color: textMuted, fontSize: 7),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
 
-            // Wallet mini card
-            GestureDetector(
-              onTap: () => context.push('/wallet'),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primary, AppColors.primaryDark],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -16,
-                      right: -16,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.07),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'UNI EATS WALLET',
-                              style: AppTypography.label.copyWith(
-                                color: Colors.white.withOpacity(0.6),
-                                fontSize: 9,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              CurrencyFormatter.compact(user.walletBalance),
-                              style: AppTypography.displayMedium.copyWith(
-                                color: Colors.white,
-                                fontSize: 22,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '●●●● 4821 · Valid 12/27',
-                              style: AppTypography.caption.copyWith(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 9,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            GestureDetector(
-                              onTap: () => context.push('/wallet'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '+ TOP UP',
-                                  style: AppTypography.label.copyWith(color: Colors.white, fontSize: 9),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Icon(Icons.chevron_right, color: Colors.white54, size: 20),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Stats row
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: cardShadow,
-              ),
-              child: Row(
-                children: [
-                  _StatItem(value: '24', label: 'Orders', color: textPrimary),
-                  _StatDivider(isDark: isDark),
-                  _StatItem(value: '4.8 ★', label: 'Avg Rating', color: AppColors.star),
-                  _StatDivider(isDark: isDark),
-                  _StatItem(value: 'QR 18', label: 'Avg Spend', color: AppColors.accent),
-                  _StatDivider(isDark: isDark),
-                  _StatItem(value: 'Gold', label: 'Tier', color: AppColors.primary),
-                ],
-              ),
-            ),
+            // Space for wallet card overlap (bottom half of the card)
+            const SizedBox(height: 66),
 
             // Loyalty & Rewards
             _SectionLabel(text: 'Loyalty & Rewards', color: textMuted),
@@ -426,17 +409,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     children: [
                       Expanded(
                         child: _PillAction(
-                          label: 'Redeem Points',
+                          label: '🎁 Redeem Points',
                           color: AppColors.primary,
-                          onTap: () => UniToast.show(context, 'Redeeming points…'),
+                          onTap: () => _showRedeemPoints(context, user.loyaltyPoints),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: _PillAction(
-                          label: 'View Rewards',
+                          label: '⭐ View Rewards',
                           color: AppColors.star,
-                          onTap: () => UniToast.show(context, 'Viewing rewards catalog…'),
+                          onTap: () => _showRewardsCatalog(context),
                         ),
                       ),
                     ],
@@ -668,7 +651,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.person_outline,
                     iconColor: AppColors.primary,
                     label: 'Edit Profile',
-                    onTap: () => UniToast.show(context, 'Opening edit profile…'),
+                    onTap: () => _showEditProfile(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
@@ -684,7 +667,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.primary,
                     label: 'Saved Locations',
                     value: '2 saved',
-                    onTap: () => UniToast.show(context, 'Opening saved addresses…'),
+                    onTap: () => _showSavedLocations(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
@@ -692,7 +675,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.accent,
                     label: 'Payment Methods',
                     value: 'QPay + Wallet',
-                    onTap: () => UniToast.show(context, 'Opening payment methods…'),
+                    onTap: () => _showPaymentMethods(context),
                   ),
                 ],
               ),
@@ -785,7 +768,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.accent,
                     label: 'Default Drop-off',
                     value: 'B3, Room 204',
-                    onTap: () => UniToast.show(context, 'Set default drop-off on campus map…'),
+                    onTap: () => _showDropoffPicker(context),
                   ),
                 ],
               ),
@@ -807,14 +790,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.chat_bubble_outline,
                     iconColor: AppColors.accent,
                     label: 'Help & Support',
-                    onTap: () => UniToast.show(context, 'Opening Help & Support…'),
+                    onTap: () => _showHelpSupport(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
                     icon: Icons.warning_amber_outlined,
                     iconColor: AppColors.danger,
                     label: 'Report a Problem',
-                    onTap: () => UniToast.show(context, 'Reporting an issue…'),
+                    onTap: () => _showReportProblem(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
@@ -822,14 +805,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.primary,
                     label: 'About Uni Eats',
                     value: 'v2.0.0',
-                    onTap: () => UniToast.show(context, 'About Uni Eats v2.0.0'),
+                    onTap: () => _showAbout(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
                     icon: Icons.shield_outlined,
                     iconColor: AppColors.primary,
                     label: 'Privacy Policy',
-                    onTap: () => UniToast.show(context, 'Opening Privacy Policy…'),
+                    onTap: () => _showPrivacyPolicy(context),
                   ),
                 ],
               ),
@@ -837,7 +820,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
             // Logout
             GestureDetector(
-              onTap: () => UniToast.show(context, 'Signing out…'),
+              onTap: () => _confirmSignOut(context),
               child: Container(
                 margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 padding: const EdgeInsets.all(12),
@@ -864,6 +847,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ],
+      ),
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return name.isNotEmpty ? name[0].toUpperCase() : 'U';
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    if (picked != null && mounted) {
+      setState(() => _avatarFile = File(picked.path));
+    }
+  }
+
+  void _showAvatarPicker(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Update Profile Photo',
+                style: AppTypography.heading.copyWith(fontSize: 15)),
+            const SizedBox(height: 16),
+            _AvatarPickerOption(
+              icon: Icons.camera_alt_outlined,
+              label: 'Take Photo',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            const SizedBox(height: 10),
+            _AvatarPickerOption(
+              icon: Icons.photo_library_outlined,
+              label: 'Choose from Gallery',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            if (_avatarFile != null) ...[
+              const SizedBox(height: 10),
+              _AvatarPickerOption(
+                icon: Icons.delete_outline,
+                label: 'Remove Photo',
+                color: AppColors.danger,
+                onTap: () {
+                  Navigator.of(context, rootNavigator: true).pop();
+                  setState(() => _avatarFile = null);
+                },
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -874,75 +922,1126 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return '${base}100';
   }
 
-  void _copyReferralCode(BuildContext context, String name) {
-    UniToast.show(context, 'Code ${_referralCode(name)} copied to clipboard!');
+  Future<void> _copyReferralCode(BuildContext context, String name) async {
+    final code = _referralCode(name);
+    await Clipboard.setData(ClipboardData(text: code));
+    if (context.mounted) UniToast.show(context, 'Code $code copied to clipboard!');
   }
-}
 
-class _Barcode extends StatelessWidget {
-  final Color color;
+  // ── Edit Profile ──────────────────────────────────────────────────────────
 
-  const _Barcode({required this.color});
+  void _showEditProfile(BuildContext context) {
+    final user = ref.read(authProvider) ?? MockDataService.currentUser;
+    final nameCtr = TextEditingController(text: user.name);
+    final phoneCtr = TextEditingController(text: user.phone ?? '');
 
-  @override
-  Widget build(BuildContext context) {
-    const heights = [18.0, 22.0, 14.0, 20.0, 16.0, 22.0, 12.0, 18.0, 20.0];
-    const widths = [1.5, 3.0, 1.5, 2.0, 1.0, 2.5, 1.5, 2.0, 1.0];
-    return SizedBox(
-      height: 22,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: List.generate(heights.length, (i) {
-          return Container(
-            margin: const EdgeInsets.only(left: 1),
-            width: widths[i],
-            height: heights[i],
-            color: color,
-          );
-        }),
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Edit Profile',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetField(controller: nameCtr, label: 'Full Name', icon: Icons.person_outline),
+            const SizedBox(height: 10),
+            _SheetField(controller: phoneCtr, label: 'Phone Number', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
+            const SizedBox(height: 20),
+            _SheetButton(
+              label: 'Save Changes',
+              onTap: () {
+                final name = nameCtr.text.trim();
+                if (name.isEmpty) return;
+                ref.read(authProvider.notifier).updateProfile(
+                  name: name,
+                  phone: phoneCtr.text.trim().isEmpty ? null : phoneCtr.text.trim(),
+                );
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Profile updated!');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Sign Out ──────────────────────────────────────────────────────────────
+
+  void _confirmSignOut(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+        return Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.logout, size: 32, color: AppColors.danger),
+              const SizedBox(height: 12),
+              Text('Sign Out?', style: AppTypography.heading.copyWith(fontSize: 16)),
+              const SizedBox(height: 6),
+              Text(
+                'You will need to sign in again to place orders.',
+                textAlign: TextAlign.center,
+                style: AppTypography.caption.copyWith(fontSize: 11),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                        ),
+                        child: Text('Cancel', textAlign: TextAlign.center,
+                            style: AppTypography.label.copyWith(color: AppColors.primary)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.of(context, rootNavigator: true).pop();
+                        // No manual navigation — the router redirects to
+                        // /login automatically once the auth state clears.
+                        ref.read(authProvider.notifier).signOut();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text('Sign Out', textAlign: TextAlign.center,
+                            style: AppTypography.label.copyWith(color: Colors.white)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Redeem Points ─────────────────────────────────────────────────────────
+
+  void _showRedeemPoints(BuildContext context, int points) {
+    const rewards = [
+      ('☕', 'Free Coffee', 200),
+      ('🍔', 'Free Burger', 350),
+      ('🥗', 'Free Salad', 300),
+      ('🎁', 'QR 5 Off', 500),
+      ('🚀', 'Free Delivery x3', 400),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Redeem Points',
+        subtitle: 'You have $points pts',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: rewards.map((r) {
+            final (emoji, name, cost) = r;
+            final canAfford = points >= cost;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: canAfford
+                    ? () {
+                        Navigator.of(context, rootNavigator: true).pop();
+                        UniToast.show(context, '$name redeemed! −$cost pts');
+                      }
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: canAfford
+                        ? AppColors.primary.withOpacity(0.08)
+                        : Colors.grey.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: canAfford
+                          ? AppColors.primary.withOpacity(0.25)
+                          : Colors.grey.withOpacity(0.15),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 22)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(name,
+                            style: AppTypography.subheading.copyWith(
+                              fontSize: 12,
+                              color: canAfford ? null : Colors.grey,
+                            )),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: canAfford ? AppColors.primary : Colors.grey.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text('$cost pts',
+                            style: AppTypography.label.copyWith(
+                              color: canAfford ? Colors.white : Colors.grey,
+                              fontSize: 9,
+                            )),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  // ── Rewards Catalog ───────────────────────────────────────────────────────
+
+  void _showRewardsCatalog(BuildContext context) {
+    const tiers = [
+      ('🥈', 'Silver', '1,000 pts', 'Free delivery on every order'),
+      ('🏆', 'Gold', '2,000 pts', '+10% points on every order'),
+      ('💎', 'Platinum', '2,500 pts', 'Priority pickup + free item monthly'),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Rewards Catalog',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: tiers.map((t) {
+            final (icon, name, pts, perk) = t;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.star.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.star.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Text(icon, style: const TextStyle(fontSize: 26)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$name Tier', style: AppTypography.subheading.copyWith(fontSize: 12)),
+                          Text(pts, style: AppTypography.caption.copyWith(color: AppColors.star, fontSize: 9)),
+                          const SizedBox(height: 2),
+                          Text(perk, style: AppTypography.caption.copyWith(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  // ── Saved Locations ───────────────────────────────────────────────────────
+
+  void _showSavedLocations(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SavedLocationsSheet(),
+    );
+  }
+
+  // ── Payment Methods ───────────────────────────────────────────────────────
+
+  void _showPaymentMethods(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Payment Methods',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PayCard(
+              label: 'Uni Eats Wallet',
+              sub: '●●●● 4821',
+              icon: Icons.account_balance_wallet_outlined,
+              color: AppColors.primary,
+              badge: 'DEFAULT',
+            ),
+            const SizedBox(height: 8),
+            _PayCard(
+              label: 'QPay',
+              sub: 'Linked · ●●●● 9203',
+              icon: Icons.credit_card_outlined,
+              color: AppColors.accent,
+            ),
+            const SizedBox(height: 16),
+            _SheetButton(
+              label: '+ Add Payment Method',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Payment method linking coming soon');
+              },
+              outlined: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Default Drop-off ──────────────────────────────────────────────────────
+
+  void _showDropoffPicker(BuildContext context) {
+    const locations = [
+      ('B1', 'Building 1 – Main Lobby'),
+      ('B2', 'Building 2 – Library Entrance'),
+      ('B3', 'Building 3 – Room 204'),
+      ('B4', 'Building 4 – Cafeteria'),
+      ('B5', 'Building 5 – Lab Wing'),
+      ('Student Centre', 'Ground Floor, Reception'),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        String selected = 'B3';
+        return StatefulBuilder(
+          builder: (_, setS) => _SheetWrapper(
+            title: 'Default Drop-off',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ...locations.map((l) {
+                  final (code, name) = l;
+                  final active = selected == code;
+                  return GestureDetector(
+                    onTap: () => setS(() => selected = code),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: active ? AppColors.primary : Colors.grey.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.location_on_outlined,
+                              size: 16, color: active ? AppColors.primary : Colors.grey),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(name,
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 12,
+                                  color: active ? AppColors.primary : null,
+                                )),
+                          ),
+                          if (active)
+                            const Icon(Icons.check_circle, size: 16, color: AppColors.primary),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 12),
+                _SheetButton(
+                  label: 'Save Location',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    UniToast.show(context, 'Default drop-off set to $selected');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Help & Support ────────────────────────────────────────────────────────
+
+  void _showHelpSupport(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Help & Support',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SupportOption(
+              icon: Icons.chat_bubble_outline,
+              color: AppColors.accent,
+              title: 'Live Chat',
+              sub: 'Avg. reply in 2 min',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Starting live chat…');
+              },
+            ),
+            const SizedBox(height: 8),
+            _SupportOption(
+              icon: Icons.email_outlined,
+              color: AppColors.primary,
+              title: 'Email Support',
+              sub: 'support@unieats.qa',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Opening email client…');
+              },
+            ),
+            const SizedBox(height: 8),
+            _SupportOption(
+              icon: Icons.phone_outlined,
+              color: AppColors.star,
+              title: 'Call Us',
+              sub: '+974 4000 0000 · 8am–8pm',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Calling support…');
+              },
+            ),
+            const SizedBox(height: 8),
+            _SupportOption(
+              icon: Icons.help_outline,
+              color: AppColors.primary,
+              title: 'FAQ',
+              sub: 'Browse common questions',
+              onTap: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, 'Opening FAQ…');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Report a Problem ──────────────────────────────────────────────────────
+
+  void _showReportProblem(BuildContext context) {
+    final ctr = TextEditingController();
+    String category = 'Order Issue';
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (_, setS) => _SheetWrapper(
+            title: 'Report a Problem',
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Category',
+                      style: AppTypography.label.copyWith(fontSize: 10)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: ['Order Issue', 'Payment', 'App Bug', 'Driver', 'Other'].map((c) {
+                      final active = category == c;
+                      return GestureDetector(
+                        onTap: () => setS(() => category = c),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: active ? AppColors.primary.withOpacity(0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: active ? AppColors.primary : Colors.grey.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(c,
+                              style: AppTypography.label.copyWith(
+                                fontSize: 10,
+                                color: active ? AppColors.primary : null,
+                              )),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  Text('Description',
+                      style: AppTypography.label.copyWith(fontSize: 10)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: ctr,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Describe the issue…',
+                      hintStyle: AppTypography.caption.copyWith(fontSize: 11),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                    style: AppTypography.body.copyWith(fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  _SheetButton(
+                    label: 'Submit Report',
+                    onTap: () {
+                      if (ctr.text.trim().isEmpty) {
+                        UniToast.show(context, 'Please describe the problem first');
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      UniToast.show(context, 'Report submitted. We\'ll respond within 24h.');
+                    },
+                  ),
+                ],
+              ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── About ─────────────────────────────────────────────────────────────────
+
+  void _showAbout(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'About Uni Eats',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryDark],
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                children: [
+                  Text('🍔', style: const TextStyle(fontSize: 36)),
+                  const SizedBox(height: 6),
+                  Text('Uni Eats', style: AppTypography.heading.copyWith(color: Colors.white, fontSize: 18)),
+                  Text('v2.0.0', style: AppTypography.caption.copyWith(color: Colors.white70, fontSize: 10)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _AboutRow('Campus', 'UDST · Doha, Qatar'),
+            _AboutRow('Category', 'Campus Food Delivery'),
+            _AboutRow('Support', 'support@unieats.qa'),
+            _AboutRow('Built with', 'Flutter + Firebase'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Privacy Policy ────────────────────────────────────────────────────────
+
+  void _showPrivacyPolicy(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'Privacy Policy',
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _PrivacySection('Data We Collect',
+                  'We collect your name, email, university ID, order history, and location data to provide campus food delivery services.'),
+              _PrivacySection('How We Use It',
+                  'Your data is used to process orders, improve recommendations, and send relevant notifications. We never sell your data.'),
+              _PrivacySection('Data Retention',
+                  'Order history is retained for 12 months. Account data is deleted within 30 days of account closure.'),
+              _PrivacySection('Your Rights',
+                  'You may request data export or deletion at any time via support@unieats.qa.'),
+              _PrivacySection('Security',
+                  'All data is encrypted in transit (TLS 1.3) and at rest (AES-256) on Firebase infrastructure.'),
+              const SizedBox(height: 8),
+              Text('Last updated: June 2025',
+                  style: AppTypography.caption.copyWith(fontSize: 9, color: Colors.grey)),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _StatItem extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color color;
+// ─────────────────────────── SHEET HELPERS ───────────────────────────────────
 
-  const _StatItem({required this.value, required this.label, required this.color});
+class _SheetWrapper extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget child;
+
+  const _SheetWrapper({required this.title, this.subtitle, required this.child});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? AppColors.darkSurface3 : AppColors.lightSurface;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
-    return Expanded(
-      child: Column(
+
+    // Lift the whole sheet above the keyboard, and let it scroll if the
+    // content + keyboard still don't fit — otherwise typing into a field
+    // near the bottom of a tall sheet gets hidden behind the keyboard.
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 16)),
+                      if (subtitle != null)
+                        Text(subtitle!,
+                            style: AppTypography.caption.copyWith(color: textMuted, fontSize: 10)),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context, rootNavigator: true).pop(),
+                    child: Icon(Icons.close_rounded, size: 20, color: textMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final TextInputType? keyboardType;
+
+  const _SheetField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.keyboardType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 18, color: AppColors.primary),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+      style: AppTypography.body.copyWith(fontSize: 13),
+    );
+  }
+}
+
+class _SheetButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool outlined;
+
+  const _SheetButton({required this.label, required this.onTap, this.outlined = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: outlined ? Colors.transparent : AppColors.primary,
+          borderRadius: BorderRadius.circular(12),
+          border: outlined ? Border.all(color: AppColors.primary) : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: AppTypography.label.copyWith(
+            color: outlined ? AppColors.primary : Colors.white,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PayCard extends StatelessWidget {
+  final String label;
+  final String sub;
+  final IconData icon;
+  final Color color;
+  final String? badge;
+
+  const _PayCard({
+    required this.label,
+    required this.sub,
+    required this.icon,
+    required this.color,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
         children: [
-          Text(value, style: AppTypography.displayMedium.copyWith(color: color, fontSize: 18)),
-          const SizedBox(height: 2),
-          Text(label, style: AppTypography.caption.copyWith(color: textMuted, fontSize: 9)),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTypography.subheading.copyWith(fontSize: 12, color: textPrimary)),
+                Text(sub, style: AppTypography.caption.copyWith(fontSize: 10, color: textMuted)),
+              ],
+            ),
+          ),
+          if (badge != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(badge!,
+                  style: AppTypography.label.copyWith(color: Colors.white, fontSize: 8)),
+            ),
         ],
       ),
     );
   }
 }
 
-class _StatDivider extends StatelessWidget {
-  final bool isDark;
+class _SupportOption extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String sub;
+  final VoidCallback onTap;
 
-  const _StatDivider({required this.isDark});
+  const _SupportOption({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.sub,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTypography.subheading.copyWith(fontSize: 12, color: textPrimary)),
+                  Text(sub, style: AppTypography.caption.copyWith(fontSize: 10, color: textMuted)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, size: 16, color: textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _AboutRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: AppTypography.caption.copyWith(color: textMuted, fontSize: 11)),
+          Text(value, style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacySection extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _PrivacySection(this.title, this.body);
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(body, style: AppTypography.body.copyWith(color: textMuted, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────── SAVED LOCATIONS SHEET ───────────────────────────────
+
+class _SavedLocationsSheet extends StatefulWidget {
+  const _SavedLocationsSheet();
+
+  @override
+  State<_SavedLocationsSheet> createState() => _SavedLocationsSheetState();
+}
+
+class _SavedLocationsSheetState extends State<_SavedLocationsSheet> {
+  final List<Map<String, String>> _locations = [
+    {'icon': '🏠', 'label': 'Home', 'address': 'Building B3, Room 204'},
+    {'icon': '📚', 'label': 'Library', 'address': 'UDST Main Library, 2nd Floor'},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _SheetWrapper(
+      title: 'Saved Locations',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ..._locations.asMap().entries.map((e) {
+            final loc = e.value;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final textPrimary = Theme.of(context).colorScheme.onSurface;
+            final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: () => _addOrEditLocation(context, index: e.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(loc['icon']!, style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(loc['label']!,
+                                style: AppTypography.subheading.copyWith(fontSize: 12, color: textPrimary)),
+                            Text(loc['address']!,
+                                style: AppTypography.caption.copyWith(fontSize: 10, color: textMuted)),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _addOrEditLocation(context, index: e.key),
+                        child: Icon(Icons.edit_outlined, size: 17, color: textMuted),
+                      ),
+                      const SizedBox(width: 14),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => _locations.removeAt(e.key));
+                          UniToast.show(context, '${loc['label']} removed');
+                        },
+                        child: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 10),
+          _SheetButton(
+            label: '+ Add Location',
+            outlined: true,
+            onTap: () => _addOrEditLocation(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Opens a small edit form. [index] == null creates a new location;
+  /// otherwise edits the existing one at that index.
+  void _addOrEditLocation(BuildContext context, {int? index}) {
+    final existing = index != null ? _locations[index] : null;
+    final labelCtr = TextEditingController(text: existing?['label'] ?? '');
+    final addressCtr = TextEditingController(text: existing?['address'] ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: index != null ? 'Edit Location' : 'Add Location',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetField(controller: labelCtr, label: 'Label (e.g. Home, Library)', icon: Icons.label_outline),
+            const SizedBox(height: 10),
+            _SheetField(controller: addressCtr, label: 'Address / Building', icon: Icons.location_on_outlined),
+            const SizedBox(height: 20),
+            _SheetButton(
+              label: 'Save Location',
+              onTap: () {
+                final label = labelCtr.text.trim();
+                final address = addressCtr.text.trim();
+                if (label.isEmpty || address.isEmpty) return;
+                setState(() {
+                  final entry = {
+                    'icon': existing?['icon'] ?? '📍',
+                    'label': label,
+                    'address': address,
+                  };
+                  if (index != null) {
+                    _locations[index] = entry;
+                  } else {
+                    _locations.add(entry);
+                  }
+                });
+                Navigator.of(context, rootNavigator: true).pop();
+                UniToast.show(context, index != null ? 'Location updated' : 'Location added');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── HERO PILL ───────────────────────────────────────
+
+class _HeroPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _HeroPill({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 1,
-      height: 32,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      color: Colors.grey.withOpacity(0.15),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.white70),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+// ─────────────────────────── AVATAR PICKER OPTION ────────────────────────────
+
+class _AvatarPickerOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _AvatarPickerOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppColors.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: c),
+            const SizedBox(width: 12),
+            Text(label,
+                style: AppTypography.body.copyWith(color: c, fontSize: 14)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── EXISTING WIDGETS ────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
   final String text;

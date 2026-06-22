@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -24,6 +24,19 @@ class WalletScreen extends ConsumerStatefulWidget {
 class _WalletScreenState extends ConsumerState<WalletScreen> {
   _WalletTab _tab = _WalletTab.overview;
   bool _isFrozen = false;
+  late DateTime _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _selectedMonth.year == now.year && _selectedMonth.month == now.month;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +93,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       isDark: isDark,
                       isFrozen: _isFrozen,
                       onTopUp: () => _showTopUpSheet(context, ref),
-                      onTransfer: () => UniToast.show(context, 'Transfer feature coming soon'),
+                      onTransfer: () => _showTransferSheet(context, ref),
                       onStatements: () => setState(() => _tab = _WalletTab.transactions),
                       onFreeze: () {
                         setState(() => _isFrozen = !_isFrozen);
@@ -100,7 +113,17 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     switch (_tab) {
                       _WalletTab.overview => _OverviewTab(
                           isDark: isDark,
+                          selectedMonth: _selectedMonth,
+                          onPrevMonth: () => setState(
+                            () => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1),
+                          ),
+                          onNextMonth: _isCurrentMonth
+                              ? null
+                              : () => setState(
+                                    () => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1),
+                                  ),
                           onTopUpAmount: (amount) => _showTopUpSheet(context, ref, initialAmount: amount),
+                          onCustomTopUp: () => _showTopUpSheet(context, ref),
                         ),
                       _WalletTab.insights => _InsightsTab(isDark: isDark),
                       _WalletTab.transactions => _TransactionsTab(
@@ -121,6 +144,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   void _showTopUpSheet(BuildContext context, WidgetRef ref, {double? initialAmount}) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _TopUpSheet(
@@ -136,6 +160,21 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   navType: NotifNavType.push,
                 ),
               );
+        },
+      ),
+    );
+  }
+
+  void _showTransferSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TransferSheet(
+        onTransfer: (amount, recipient) {
+          final error = ref.read(walletBalanceProvider.notifier).transfer(amount, recipient: recipient);
+          return error;
         },
       ),
     );
@@ -680,8 +719,19 @@ class _SectionLabel extends StatelessWidget {
 class _OverviewTab extends StatelessWidget {
   final bool isDark;
   final ValueChanged<double> onTopUpAmount;
+  final VoidCallback onCustomTopUp;
+  final DateTime selectedMonth;
+  final VoidCallback onPrevMonth;
+  final VoidCallback? onNextMonth;
 
-  const _OverviewTab({required this.isDark, required this.onTopUpAmount});
+  const _OverviewTab({
+    required this.isDark,
+    required this.onTopUpAmount,
+    required this.onCustomTopUp,
+    required this.selectedMonth,
+    required this.onPrevMonth,
+    required this.onNextMonth,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -701,15 +751,20 @@ class _OverviewTab extends StatelessWidget {
                   _SmallCircleButton(
                     icon: Icons.chevron_left,
                     isDark: isDark,
-                    onTap: () => UniToast.show(context, 'Previous month'),
+                    onTap: onPrevMonth,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'June 2026',
+                    DateFormat('MMMM yyyy').format(selectedMonth),
                     style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 12),
                   ),
                   const SizedBox(width: 8),
-                  _SmallCircleButton(icon: Icons.chevron_right, isDark: isDark, muted: true, onTap: () {}),
+                  _SmallCircleButton(
+                    icon: Icons.chevron_right,
+                    isDark: isDark,
+                    muted: onNextMonth == null,
+                    onTap: onNextMonth ?? () {},
+                  ),
                 ],
               ),
               const Spacer(),
@@ -804,7 +859,7 @@ class _OverviewTab extends StatelessWidget {
               _TopupChip(
                 label: 'Custom',
                 isDark: isDark,
-                onTap: () => onTopUpAmount(50),
+                onTap: onCustomTopUp,
               ),
             ],
           ),
@@ -1515,6 +1570,226 @@ class _StatementRow extends StatelessWidget {
   }
 }
 
+// ── Transfer sheet ─────────────────────────────────────────────────────────
+
+class _TransferSheet extends StatefulWidget {
+  /// Returns null on success, an error message on failure.
+  final String? Function(double amount, String recipient) onTransfer;
+
+  const _TransferSheet({required this.onTransfer});
+
+  @override
+  State<_TransferSheet> createState() => _TransferSheetState();
+}
+
+class _TransferSheetState extends State<_TransferSheet> {
+  final _recipientCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  String? _error;
+  bool _processing = false;
+
+  @override
+  void dispose() {
+    _recipientCtrl.dispose();
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  bool get _recipientValid {
+    final v = _recipientCtrl.text.trim();
+    return v.contains('@') || v.length >= 6;
+  }
+
+  Future<void> _submit() async {
+    final recipient = _recipientCtrl.text.trim();
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+
+    if (!_recipientValid) {
+      setState(() => _error = 'Enter a valid student email or ID.');
+      return;
+    }
+    if (amount <= 0) {
+      setState(() => _error = 'Enter a valid amount.');
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _processing = true;
+    });
+    await Future.delayed(const Duration(milliseconds: 700));
+    if (!mounted) return;
+
+    final result = widget.onTransfer(amount, recipient);
+    if (result != null) {
+      setState(() {
+        _processing = false;
+        _error = result;
+      });
+      return;
+    }
+
+    Navigator.pop(context);
+    UniToast.show(context, '✓ ${CurrencyFormatter.format(amount)} sent to $recipient');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    return Consumer(
+      builder: (context, ref, _) {
+        final currentBalance = ref.watch(walletBalanceProvider);
+        return Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkSurface3 : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Transfer Money',
+                style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 14),
+              ),
+              const SizedBox(height: 3),
+              Text.rich(
+                TextSpan(
+                  style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 10),
+                  children: [
+                    const TextSpan(text: 'Current balance: '),
+                    TextSpan(
+                      text: CurrencyFormatter.format(currentBalance),
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('To', style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  controller: _recipientCtrl,
+                  style: AppTypography.body.copyWith(color: textPrimary, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Student email or ID',
+                    hintStyle: AppTypography.body.copyWith(color: textSecondary, fontSize: 13),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('Amount', style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Text('QAR', style: AppTypography.subheading.copyWith(color: textSecondary, fontSize: 13)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 18),
+                        decoration: const InputDecoration(
+                          hintText: '0',
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(_error!, style: AppTypography.caption.copyWith(color: AppColors.danger, fontSize: 11)),
+              ],
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(50),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(50),
+                    onTap: _processing ? null : _submit,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.walletGradient,
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      alignment: Alignment.center,
+                      child: _processing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(
+                              'Send',
+                              style: AppTypography.button.copyWith(color: Colors.white, fontSize: 12),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Center(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Text(
+                    'Cancel',
+                    style: AppTypography.caption.copyWith(
+                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _TransactionTile extends StatelessWidget {
   final WalletTransactionModel tx;
   final bool isDark;
@@ -1524,6 +1799,7 @@ class _TransactionTile extends StatelessWidget {
   String _emojiFor(WalletTransactionModel tx) {
     if (tx.type == TransactionType.topUp) return '⬆️';
     if (tx.type == TransactionType.refund) return '↩️';
+    if (tx.type == TransactionType.transferOut) return '↗️';
     final desc = (tx.description ?? '').toLowerCase();
     if (desc.contains('hortons') || desc.contains('caribou') || desc.contains('coffee')) return '☕';
     if (desc.contains('oakberry') || desc.contains('healthy')) return '🥗';
@@ -1609,12 +1885,32 @@ class _TopUpSheet extends StatefulWidget {
 
 class _TopUpSheetState extends State<_TopUpSheet> {
   late double _selectedAmount;
+  late final TextEditingController _amountCtrl;
   bool _processing = false;
 
   @override
   void initState() {
     super.initState();
     _selectedAmount = widget.initialAmount ?? 50;
+    _amountCtrl = TextEditingController(text: _selectedAmount.toStringAsFixed(0));
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(double amount) {
+    setState(() {
+      _selectedAmount = amount;
+      _amountCtrl.text = amount.toStringAsFixed(0);
+    });
+  }
+
+  void _onAmountChanged(String text) {
+    final parsed = double.tryParse(text);
+    setState(() => _selectedAmount = parsed ?? 0);
   }
 
   @override
@@ -1671,7 +1967,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
                   borderRadius: BorderRadius.circular(12),
@@ -1681,9 +1977,16 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                     Text('QAR', style: AppTypography.subheading.copyWith(color: textSecondary, fontSize: 13)),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        _selectedAmount.toStringAsFixed(0),
+                      child: TextField(
+                        controller: _amountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: _onAmountChanged,
                         style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 18),
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
                       ),
                     ),
                   ],
@@ -1696,7 +1999,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                 children: [20.0, 50.0, 100.0, 200.0].map((amount) {
                   final selected = _selectedAmount == amount;
                   return GestureDetector(
-                    onTap: () => setState(() => _selectedAmount = amount),
+                    onTap: () => _selectPreset(amount),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                       decoration: BoxDecoration(
@@ -1724,7 +2027,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                   borderRadius: BorderRadius.circular(50),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(50),
-                    onTap: _processing
+                    onTap: (_processing || _selectedAmount <= 0)
                         ? null
                         : () async {
                             setState(() => _processing = true);
@@ -1737,7 +2040,8 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       decoration: BoxDecoration(
-                        gradient: AppColors.walletGradient,
+                        gradient: _selectedAmount > 0 ? AppColors.walletGradient : null,
+                        color: _selectedAmount > 0 ? null : Colors.grey.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(50),
                       ),
                       alignment: Alignment.center,

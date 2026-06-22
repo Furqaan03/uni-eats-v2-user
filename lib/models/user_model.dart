@@ -14,6 +14,7 @@ class UserModel {
   final int loyaltyPoints;
   final List<String> dietaryPreferences;
   final String? avatarUrl;
+  final bool isBlocked;
 
   const UserModel({
     required this.id,
@@ -26,6 +27,7 @@ class UserModel {
     this.loyaltyPoints = 0,
     this.dietaryPreferences = const [],
     this.avatarUrl,
+    this.isBlocked = false,
   });
 
   UserModel copyWith({

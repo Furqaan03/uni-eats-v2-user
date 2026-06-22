@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import 'providers/auth_provider.dart';
 import 'widgets/auth_input_field.dart';
+import 'widgets/google_signin_button.dart';
+
+const _kPrefRememberedEmail = 'remembered_email';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -18,7 +22,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _rememberMe = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedEmail();
+  }
+
+  Future<void> _loadRememberedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_kPrefRememberedEmail);
+    if (saved != null && mounted) {
+      setState(() => _emailController.text = saved);
+    }
+  }
+
+  Future<void> _persistRememberedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString(_kPrefRememberedEmail, _emailController.text.trim());
+    } else {
+      await prefs.remove(_kPrefRememberedEmail);
+    }
+  }
 
   @override
   void dispose() {
@@ -27,12 +56,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+
   String _errorMessage(AuthError? error) {
     return switch (error) {
       AuthError.invalidEmail => 'Please enter a valid email address.',
-      AuthError.notUdstDomain => 'Only @udst.edu.qa email addresses are accepted.',
-      AuthError.weakPassword =>
-        'Password must be 8+ characters with uppercase, lowercase, and a digit.',
+      AuthError.weakPassword => 'Password must be at least 6 characters.',
       AuthError.tooManyAttempts =>
         'Too many failed attempts. Please try again later.',
       // Generic message — never reveal which field is wrong.
@@ -55,9 +83,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
+      await _persistRememberedEmail();
+      if (!mounted) return;
       context.go('/home');
     } else {
       setState(() => _error = _errorMessage(result.error));
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _error = null;
+    });
+
+    final error = await ref.read(authProvider.notifier).signInWithGoogle();
+
+    if (!mounted) return;
+    setState(() => _isGoogleLoading = false);
+
+    if (error != null) {
+      setState(() => _error = error);
+    } else {
+      context.go('/home');
     }
   }
 
@@ -67,9 +115,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
+    ref.listen<String?>(blockedMessageProvider, (previous, next) {
+      if (next != null) {
+        setState(() => _error = next);
+        ref.read(blockedMessageProvider.notifier).state = null;
+      }
+    });
+
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,14 +136,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Sign in with your UDST email',
+                'Sign in to your account',
                 style: AppTypography.body.copyWith(color: textSecondary),
               ),
               const SizedBox(height: 40),
               AuthInputField(
                 controller: _emailController,
-                label: 'UDST Email',
-                hint: 'you@udst.edu.qa',
+                label: 'Email',
+                hint: 'you@example.com',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -98,6 +153,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 label: 'Password',
                 icon: Icons.lock_outline,
                 obscureText: true,
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => setState(() => _rememberMe = !_rememberMe),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Checkbox(
+                        value: _rememberMe,
+                        onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                        activeColor: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('Remember me', style: AppTypography.body.copyWith(color: textSecondary)),
+                  ],
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
@@ -119,6 +194,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         )
                       : const Text('Sign In'),
                 ),
+              ),
+              const SizedBox(height: 16),
+              const AuthOrDivider(),
+              const SizedBox(height: 16),
+              GoogleSignInButton(
+                loading: _isGoogleLoading,
+                onPressed: (_isLoading || _isGoogleLoading) ? null : _signInWithGoogle,
               ),
               const SizedBox(height: 16),
               Center(
@@ -144,7 +226,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const Spacer(),
               Center(
                 child: Text(
-                  'Students & faculty only · @udst.edu.qa',
+                  'Uni Eats · Test build',
                   style: AppTypography.caption.copyWith(color: textSecondary),
                 ),
               ),
