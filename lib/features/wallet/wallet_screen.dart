@@ -129,6 +129,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       _WalletTab.transactions => _TransactionsTab(
                           isDark: isDark,
                           textSecondary: textSecondary,
+                          transactions: ref.watch(walletTransactionsProvider),
                         ),
                     },
                   ],
@@ -1466,13 +1467,16 @@ class _RestaurantRankRow extends StatelessWidget {
 class _TransactionsTab extends StatelessWidget {
   final bool isDark;
   final Color textSecondary;
+  final List<WalletTransactionModel> transactions;
 
-  const _TransactionsTab({required this.isDark, required this.textSecondary});
+  const _TransactionsTab({
+    required this.isDark,
+    required this.textSecondary,
+    required this.transactions,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final transactions = MockDataService.walletTransactions;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -14,6 +14,7 @@ import '../../utils/currency_formatter.dart';
 import '../home/providers/notifications_provider.dart';
 import '../orders/providers/orders_provider.dart';
 import '../restaurant/providers/restaurant_status_provider.dart';
+import '../restaurant/providers/restaurants_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/delivery_capacity_provider.dart';
@@ -27,6 +28,12 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
+
+/// Flat delivery fee — confirmed fixed business rule, equal to the driver's
+/// flat payout (kDriverPayoutPerDelivery in the driver app's
+/// firestore_order_service.dart). The platform takes no margin on delivery.
+/// Previously hardcoded to 2.50, which didn't match the actual agreed rate.
+const kDeliveryFee = 5.0;
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   DeliveryType _deliveryType = DeliveryType.delivery;
@@ -79,7 +86,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final cart = ref.watch(cartProvider);
     final subtotal = ref.watch(cartTotalProvider);
-    final deliveryFee = _deliveryType == DeliveryType.delivery ? 2.50 : 0.0;
+    final deliveryFee = _deliveryType == DeliveryType.delivery ? kDeliveryFee : 0.0;
     final total = (subtotal + deliveryFee - _voucherDiscount).clamp(0.0, double.infinity);
     final balance = ref.watch(availableBalanceProvider);
     final restaurantStatus = cart.isEmpty
@@ -131,7 +138,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ? 'Drivers are busy — delivery may be delayed'
                           : 'Student driver will deliver to you',
                   icon: Icons.delivery_dining,
-                  fee: 2.50,
+                  fee: kDeliveryFee,
                   isSelected: _deliveryType == DeliveryType.delivery,
                   disabled: deliveryBlocked,
                   warning: deliveryTight,
@@ -419,7 +426,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final _rawNum = (1000 + orderId.hashCode.abs() % 9000).toString();
     final orderNumber = '#${_deliveryType == DeliveryType.pickup ? 'P' : 'D'}$_rawNum';
     final restaurantId = cart.first.item.restaurantId;
-    final restaurant = MockDataService.restaurants
+    final allRestaurants = ref.read(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
+    final restaurant = allRestaurants
         .cast<RestaurantModel?>()
         .firstWhere((r) => r!.id == restaurantId, orElse: () => null);
     if (restaurant == null) {
@@ -441,7 +449,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
     final cartSubtotal = ref.read(cartTotalProvider);
-    final deliveryFee = _deliveryType == DeliveryType.delivery ? 2.50 : 0.0;
+    final deliveryFee = _deliveryType == DeliveryType.delivery ? kDeliveryFee : 0.0;
     final subtotal = cartSubtotal;
     final estimatedDelivery = DateTime.now().add(
       Duration(minutes: restaurant.deliveryTimeMin + 5),

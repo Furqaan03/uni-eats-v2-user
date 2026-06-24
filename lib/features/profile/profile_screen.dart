@@ -13,6 +13,7 @@ import '../../core/widgets/uni_toast.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../restaurant/providers/restaurants_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -54,7 +55,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? null
         : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10)];
     final user = ref.watch(authProvider) ?? MockDataService.currentUser;
-    final restaurants = MockDataService.restaurants;
+    final restaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
     final walletBalance = ref.watch(availableBalanceProvider);
 
     return Scaffold(

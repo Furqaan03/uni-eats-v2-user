@@ -5,8 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/cart_item_model.dart';
 import '../models/menu_item_model.dart';
 import '../models/order_model.dart';
+import '../models/restaurant_model.dart';
 import '../models/user_model.dart';
 import '../models/wallet_transaction_model.dart';
+import 'mock_data_service.dart';
 
 // Set to true after running `flutterfire configure` and adding google-services.json.
 // See PLAN.md for full setup instructions.
@@ -289,17 +291,66 @@ class FirestoreOrderService {
         });
   }
 
-  /// Real-time stream of vendor-edited menu item data (price, discount, etc.)
-  /// for a restaurant. Returns a map of itemId → raw Firestore fields.
-  /// Items the vendor has never edited simply won't have an entry here, so
-  /// callers should fall back to the static mock item when a key is missing.
-  Stream<Map<String, Map<String, dynamic>>> streamMenuItemOverrides(String restaurantId) {
+  /// Live restaurant catalog — merges real vendor-app edits (name, location,
+  /// category, description, delivery time, min order, delivery/pickup
+  /// support, open/busy) over MockDataService's known per-restaurant
+  /// defaults. The defaults still supply rating/reviewCount (no review
+  /// system exists yet) and campusX/Y (no map-pin-placement UI exists yet),
+  /// and stand in fully for any restaurant whose vendor hasn't edited
+  /// anything in Firestore at all — that's why this never reads as "empty"
+  /// even before a single vendor has logged in.
+  Stream<List<RestaurantModel>> streamRestaurants() {
+    return FirebaseFirestore.instance.collection('restaurants').snapshots().map((snap) {
+      final liveById = {for (final d in snap.docs) d.id: d.data()};
+      return MockDataService.restaurants.map((base) {
+        final live = liveById[base.id];
+        if (live == null) return base;
+        return base.copyWith(
+          name: live['name'] as String?,
+          building: live['location'] as String?,
+          category: live['category'] as String?,
+          description: live['description'] as String?,
+          deliveryTimeMin: (live['deliveryTimeMin'] as num?)?.toInt(),
+          minOrder: (live['minOrder'] as num?)?.toDouble(),
+          isOpen: live['isOpen'] as bool?,
+          isBusy: live['isBusy'] as bool?,
+          offersDelivery: live['offersDelivery'] as bool?,
+          offersPickup: live['offersPickup'] as bool?,
+        );
+      }).toList();
+    });
+  }
+
+  /// Live menu for [restaurantId] — real items the vendor has added in
+  /// Firestore, or the known mock menu as a fallback while a restaurant's
+  /// vendor hasn't added any items yet (so Tim Hortons et al. stay usable
+  /// for testing without needing every vendor to populate a real menu).
+  Stream<List<MenuItemModel>> streamMenuItems(String restaurantId) {
     return FirebaseFirestore.instance
         .collection('menus')
         .doc(restaurantId)
         .collection('items')
         .snapshots()
-        .map((snap) => {for (final d in snap.docs) d.id: d.data()});
+        .map((snap) {
+          if (snap.docs.isEmpty) return MockDataService.menuForRestaurant(restaurantId);
+          return snap.docs.map((d) {
+            final m = d.data();
+            final tags = (m['tags'] as List<dynamic>?)?.cast<String>() ?? const [];
+            return MenuItemModel(
+              id: m['id'] as String? ?? d.id,
+              restaurantId: restaurantId,
+              name: m['name'] as String? ?? '',
+              description: m['description'] as String?,
+              price: (m['price'] as num?)?.toDouble() ?? 0,
+              category: m['category'] as String? ?? '',
+              isAvailable: m['isAvailable'] as bool? ?? true,
+              isBestseller: tags.contains('Best Seller'),
+              isNew: tags.contains('New'),
+              isPopular: tags.contains('Featured') || tags.contains('Top Rated'),
+              discountPercent: (m['discountPercent'] as num?)?.toDouble(),
+            );
+          }).toList();
+        });
   }
 
   /// Real-time stream of a restaurant's open/busy status, as set by the

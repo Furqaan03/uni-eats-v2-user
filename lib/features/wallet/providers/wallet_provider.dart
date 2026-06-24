@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 import '../../../models/user_model.dart';
 import '../../../models/wallet_transaction_model.dart';
 import '../../../services/firestore_order_service.dart';
-import '../../../services/mock_data_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 final walletBalanceProvider = StateNotifierProvider<WalletNotifier, double>((ref) {
@@ -26,7 +25,7 @@ final availableBalanceProvider = Provider<double>((ref) {
 final walletTransactionsProvider = Provider<List<WalletTransactionModel>>((ref) {
   // Re-read on every balance change so the list reflects newly persisted transactions.
   ref.watch(walletBalanceProvider);
-  return List.unmodifiable(MockDataService.walletTransactions);
+  return ref.read(walletBalanceProvider.notifier).transactions;
 });
 
 class WalletNotifier extends StateNotifier<double> {
@@ -45,6 +44,12 @@ class WalletNotifier extends StateNotifier<double> {
   String? _lastUserId;
   final Map<String, double> _holds = {};
   final Set<String> _resolvedOrders = {}; // captured or released — never act twice
+  // Owned here instead of a global mutable list on MockDataService — that
+  // static was never cleared/scoped per user beyond what this class already
+  // does to it, so keeping the real list as this notifier's own state is
+  // clearer about where wallet truth actually lives.
+  final List<WalletTransactionModel> _transactions = [];
+  List<WalletTransactionModel> get transactions => List.unmodifiable(_transactions);
 
   // Tied to the real authProvider-derived id (kept in sync by the listener
   // above), not MockDataService.currentUser — that static is never cleared
@@ -57,7 +62,7 @@ class WalletNotifier extends StateNotifier<double> {
     _resolvedOrders.clear();
     _syncHeldTotal();
     state = 0;
-    MockDataService.walletTransactions.clear();
+    _transactions.clear();
     if (_userId.isNotEmpty) _loadPersisted();
   }
 
@@ -68,13 +73,13 @@ class WalletNotifier extends StateNotifier<double> {
       final txs = await FirestoreOrderService.instance.fetchWalletTransactions(_userId);
       if (balance == null) {
         // First run for this user — start a clean wallet at zero, no mock history.
-        MockDataService.walletTransactions.clear();
+        _transactions.clear();
         await FirestoreOrderService.instance.setWalletBalance(_userId, 0);
         return;
       }
       state = balance;
       if (txs.isNotEmpty) {
-        MockDataService.walletTransactions
+        _transactions
           ..clear()
           ..addAll(txs);
       }
@@ -89,7 +94,7 @@ class WalletNotifier extends StateNotifier<double> {
   /// same force-close-mid-write class of bug that hit order captures.
   void _applyBalanceChange(double newBalance, WalletTransactionModel tx) {
     state = newBalance;
-    MockDataService.walletTransactions.insert(0, tx);
+    _transactions.insert(0, tx);
     if (!kUseFirebase) return;
     FirestoreOrderService.instance
         .updateWalletBalanceWithTransaction(userId: _userId, newBalance: newBalance, tx: tx)
@@ -135,7 +140,7 @@ class WalletNotifier extends StateNotifier<double> {
     // Defense in depth against a same-session double-call before the batch
     // above even existed in a previous app version — the real guarantee now
     // comes from order.paymentStatus, checked by the caller in orders_provider.
-    final alreadyCaptured = MockDataService.walletTransactions
+    final alreadyCaptured = _transactions
         .any((tx) => tx.type == TransactionType.payment && tx.reference == 'ORD-$orderId');
     _resolvedOrders.add(orderId);
     if (alreadyCaptured) return;
@@ -152,7 +157,7 @@ class WalletNotifier extends StateNotifier<double> {
       timestamp: DateTime.now(),
     );
     state = newBalance;
-    MockDataService.walletTransactions.insert(0, tx);
+    _transactions.insert(0, tx);
     if (!kUseFirebase) return;
     FirestoreOrderService.instance
         .captureOrderPayment(orderId: orderId, userId: _userId, newBalance: newBalance, tx: tx)

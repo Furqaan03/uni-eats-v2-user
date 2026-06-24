@@ -12,6 +12,7 @@ import '../../utils/currency_formatter.dart';
 import '../cart/providers/cart_provider.dart';
 import 'providers/menu_availability_provider.dart';
 import 'providers/restaurant_status_provider.dart';
+import 'providers/restaurants_provider.dart';
 
 class RestaurantDetailScreen extends ConsumerStatefulWidget {
   final String restaurantId;
@@ -45,21 +46,12 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
 
-    final restaurant = MockDataService.restaurants.firstWhere(
+    final allRestaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
+    final restaurant = allRestaurants.firstWhere(
       (r) => r.id == widget.restaurantId,
-      orElse: () => MockDataService.restaurants.first,
+      orElse: () => allRestaurants.first,
     );
-    final overridesAsync = ref.watch(menuItemOverridesProvider(restaurant.id));
-    final overrides = overridesAsync.valueOrNull ?? {};
-    final menuItems = MockDataService.menuForRestaurant(restaurant.id).map((item) {
-      final o = overrides[item.id];
-      if (o == null) return item;
-      return item.copyWith(
-        price: (o['price'] as num?)?.toDouble(),
-        discountPercent: (o['discountPercent'] as num?)?.toDouble(),
-        clearDiscount: o['discountPercent'] == null,
-      );
-    }).toList();
+    final menuItems = ref.watch(menuItemsProvider(restaurant.id)).valueOrNull ?? const [];
     final menuCategories = <String>{...menuItems.map((m) => m.category)}.toList();
     final chipCategories = ['All', ...menuCategories];
     final sections = _selectedCategory == 'All' ? menuCategories : [_selectedCategory];

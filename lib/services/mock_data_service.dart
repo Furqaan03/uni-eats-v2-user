@@ -4,7 +4,6 @@ import '../models/menu_item_model.dart';
 import '../models/order_model.dart';
 import '../models/restaurant_model.dart';
 import '../models/user_model.dart';
-import '../models/wallet_transaction_model.dart';
 
 /// In-memory mock data for MVP.
 ///
@@ -449,45 +448,6 @@ class MockDataService {
       createdAt: DateTime(2026, 6, 10),
       isRefunded: true,
       cancelReason: 'Cancelled by you · Before preparing',
-    ),
-  ];
-
-  static final List<WalletTransactionModel> walletTransactions = [
-    WalletTransactionModel(
-      id: 't001',
-      userId: 'u001',
-      amount: 50.00,
-      type: TransactionType.topUp,
-      reference: 'NOQ-782910',
-      description: 'Top-up via Noqoody',
-      timestamp: DateTime.now().subtract(const Duration(days: 2)),
-    ),
-    WalletTransactionModel(
-      id: 't002',
-      userId: 'u001',
-      amount: 28.00,
-      type: TransactionType.payment,
-      reference: 'ORD-o002',
-      description: 'Tim Hortons — Pickup',
-      timestamp: DateTime.now().subtract(const Duration(days: 1, hours: 2)),
-    ),
-    WalletTransactionModel(
-      id: 't003',
-      userId: 'u001',
-      amount: 30.50,
-      type: TransactionType.payment,
-      reference: 'ORD-o001',
-      description: 'Oakberry — Delivery',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 18)),
-    ),
-    WalletTransactionModel(
-      id: 't004',
-      userId: 'u001',
-      amount: 25.50,
-      type: TransactionType.topUp,
-      reference: 'NOQ-119283',
-      description: 'Top-up via Noqoody',
-      timestamp: DateTime.now().subtract(const Duration(days: 7)),
     ),
   ];
 

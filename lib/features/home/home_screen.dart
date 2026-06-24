@@ -14,6 +14,7 @@ import '../../models/restaurant_model.dart';
 import '../../models/order_model.dart';
 import '../../services/mock_data_service.dart';
 import '../orders/providers/orders_provider.dart';
+import '../restaurant/providers/restaurants_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
 import 'providers/notifications_provider.dart';
 import 'widgets/campus_map_preview.dart';
@@ -76,11 +77,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  List<RestaurantModel> get _baseList {
-    if (_selectedCategory == 'All') {
-      return List.from(MockDataService.restaurants);
-    }
-    return MockDataService.restaurants.where((r) => _matchesCategory(r.category)).toList();
+  List<RestaurantModel> _baseList(List<RestaurantModel> all) {
+    if (_selectedCategory == 'All') return List.from(all);
+    return all.where((r) => _matchesCategory(r.category)).toList();
   }
 
   List<RestaurantModel> _applySearchAndFilter(List<RestaurantModel> list) {
@@ -135,8 +134,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final mutedColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
     final balance = ref.watch(walletBalanceProvider);
+    final restaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
 
-    final filteredRestaurants = _applySearchAndFilter(_baseList);
+    final filteredRestaurants = _applySearchAndFilter(_baseList(restaurants));
 
     return Scaffold(
       body: CustomScrollView(
@@ -247,9 +247,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: MockDataService.restaurants.length,
+                  itemCount: restaurants.length,
                   itemBuilder: (context, index) {
-                    final restaurant = MockDataService.restaurants[index];
+                    final restaurant = restaurants[index];
                     return RestaurantCard(
                       restaurant: restaurant,
                       onTap: () => context.push('/restaurant/${restaurant.id}'),
@@ -269,13 +269,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final restaurant = MockDataService.restaurants[index];
+                  final restaurant = restaurants[index];
                   return RestaurantListTile(
                     restaurant: restaurant,
                     onTap: () => context.push('/restaurant/${restaurant.id}'),
                   );
                 },
-                childCount: 2,
+                childCount: restaurants.length < 2 ? restaurants.length : 2,
               ),
             ),
             SliverToBoxAdapter(
@@ -292,9 +292,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: MockDataService.restaurants.length,
+                  itemCount: restaurants.length,
                   itemBuilder: (context, index) {
-                    final restaurant = MockDataService.restaurants[index];
+                    final restaurant = restaurants[index];
                     return RestaurantCard(
                       restaurant: restaurant,
                       onTap: () => context.push('/restaurant/${restaurant.id}'),
