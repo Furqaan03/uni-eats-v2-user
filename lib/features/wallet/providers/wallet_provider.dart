@@ -46,7 +46,11 @@ class WalletNotifier extends StateNotifier<double> {
   final Map<String, double> _holds = {};
   final Set<String> _resolvedOrders = {}; // captured or released — never act twice
 
-  String get _userId => MockDataService.currentUser.id;
+  // Tied to the real authProvider-derived id (kept in sync by the listener
+  // above), not MockDataService.currentUser — that static is never cleared
+  // on sign-out, so reading it here would keep loading the previous
+  // logged-out user's wallet after a fresh logout.
+  String get _userId => _lastUserId ?? '';
 
   void _resetForNewUser() {
     _holds.clear();
@@ -79,19 +83,17 @@ class WalletNotifier extends StateNotifier<double> {
     }
   }
 
-  void _persistBalance() {
-    if (!kUseFirebase) return;
-    FirestoreOrderService.instance
-        .setWalletBalance(_userId, state)
-        .catchError((e) => debugPrint('[Firestore] persistBalance failed: $e'));
-  }
-
-  void _recordTransaction(WalletTransactionModel tx) {
+  /// Applies a balance change and its transaction record together, both
+  /// locally and (atomically, via a single Firestore batch) remotely — see
+  /// updateWalletBalanceWithTransaction. Keeps top-up/transfer immune to the
+  /// same force-close-mid-write class of bug that hit order captures.
+  void _applyBalanceChange(double newBalance, WalletTransactionModel tx) {
+    state = newBalance;
     MockDataService.walletTransactions.insert(0, tx);
     if (!kUseFirebase) return;
     FirestoreOrderService.instance
-        .addWalletTransaction(_userId, tx)
-        .catchError((e) => debugPrint('[Firestore] persistTransaction failed: $e'));
+        .updateWalletBalanceWithTransaction(userId: _userId, newBalance: newBalance, tx: tx)
+        .catchError((e) => debugPrint('[Firestore] updateWalletBalance failed: $e'));
   }
 
   void _syncHeldTotal() {
@@ -119,20 +121,28 @@ class WalletNotifier extends StateNotifier<double> {
   }
 
   /// Vendor accepted the order — actually deduct the held funds.
+  ///
+  /// The balance debit, the wallet transaction record, and the order's
+  /// paymentStatus flip to 'captured' are written as a single atomic
+  /// Firestore batch (see captureOrderPayment) — not three independent
+  /// fire-and-forget writes. That used to be the actual cause of the wallet
+  /// going negative on a force-close: if the app died between the balance
+  /// write and the order's paymentStatus write, the order still read as
+  /// 'held' on next launch and got captured a second time. With one atomic
+  /// batch, either all of it lands or none of it does, so a retry is safe.
   void capturePayment(String orderId, double amount, {required String description}) {
     if (_resolvedOrders.contains(orderId)) return; // idempotent within this session
-    // Defense in depth across restarts: if a payment transaction for this
-    // order already exists (e.g. the Firestore paymentStatus write from a
-    // previous session didn't land before the app closed), don't deduct again.
+    // Defense in depth against a same-session double-call before the batch
+    // above even existed in a previous app version — the real guarantee now
+    // comes from order.paymentStatus, checked by the caller in orders_provider.
     final alreadyCaptured = MockDataService.walletTransactions
         .any((tx) => tx.type == TransactionType.payment && tx.reference == 'ORD-$orderId');
     _resolvedOrders.add(orderId);
     if (alreadyCaptured) return;
     _holds.remove(orderId);
     _syncHeldTotal();
-    state -= amount;
-    _persistBalance();
-    _recordTransaction(WalletTransactionModel(
+    final newBalance = state - amount;
+    final tx = WalletTransactionModel(
       id: const Uuid().v4(),
       userId: _userId,
       amount: amount,
@@ -140,7 +150,13 @@ class WalletNotifier extends StateNotifier<double> {
       reference: 'ORD-$orderId',
       description: description,
       timestamp: DateTime.now(),
-    ));
+    );
+    state = newBalance;
+    MockDataService.walletTransactions.insert(0, tx);
+    if (!kUseFirebase) return;
+    FirestoreOrderService.instance
+        .captureOrderPayment(orderId: orderId, userId: _userId, newBalance: newBalance, tx: tx)
+        .catchError((e) => debugPrint('[Firestore] captureOrderPayment failed: $e'));
   }
 
   /// Order was rejected/cancelled before acceptance — release the hold, no deduction.
@@ -155,31 +171,33 @@ class WalletNotifier extends StateNotifier<double> {
   String? transfer(double amount, {required String recipient}) {
     if (amount <= 0) return 'Enter a valid amount.';
     if (!canPay(amount)) return 'Insufficient wallet balance.';
-    state -= amount;
-    _persistBalance();
-    _recordTransaction(WalletTransactionModel(
-      id: const Uuid().v4(),
-      userId: _userId,
-      amount: amount,
-      type: TransactionType.transferOut,
-      reference: 'TRF-${const Uuid().v4().substring(0, 8).toUpperCase()}',
-      description: 'Transfer to $recipient',
-      timestamp: DateTime.now(),
-    ));
+    _applyBalanceChange(
+      state - amount,
+      WalletTransactionModel(
+        id: const Uuid().v4(),
+        userId: _userId,
+        amount: amount,
+        type: TransactionType.transferOut,
+        reference: 'TRF-${const Uuid().v4().substring(0, 8).toUpperCase()}',
+        description: 'Transfer to $recipient',
+        timestamp: DateTime.now(),
+      ),
+    );
     return null;
   }
 
   void topUp(double amount) {
-    state += amount;
-    _persistBalance();
-    _recordTransaction(WalletTransactionModel(
-      id: const Uuid().v4(),
-      userId: _userId,
-      amount: amount,
-      type: TransactionType.topUp,
-      reference: 'NOQ-${const Uuid().v4().substring(0, 8).toUpperCase()}',
-      description: 'Top-up via Noqoody',
-      timestamp: DateTime.now(),
-    ));
+    _applyBalanceChange(
+      state + amount,
+      WalletTransactionModel(
+        id: const Uuid().v4(),
+        userId: _userId,
+        amount: amount,
+        type: TransactionType.topUp,
+        reference: 'NOQ-${const Uuid().v4().substring(0, 8).toUpperCase()}',
+        description: 'Top-up via Noqoody',
+        timestamp: DateTime.now(),
+      ),
+    );
   }
 }

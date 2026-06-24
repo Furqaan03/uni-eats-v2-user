@@ -174,16 +174,13 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
     } else if (order.status != OrderStatus.placed &&
         order.status != OrderStatus.cancelled &&
         order.paymentStatus != PaymentStatus.captured) {
+      // capturePayment now writes the order's paymentStatus='captured' flip
+      // atomically together with the wallet debit — no separate call needed.
       _ref.read(walletBalanceProvider.notifier).capturePayment(
             order.id,
             order.total,
             description: '${order.restaurantName} — ${order.deliveryType.name}',
           );
-      if (kUseFirebase) {
-        FirestoreOrderService.instance
-            .updatePaymentStatus(order.id, 'captured')
-            .catchError((e) => debugPrint('[Firestore] captureMark failed: $e'));
-      }
     }
   }
 

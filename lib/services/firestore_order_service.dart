@@ -230,6 +230,52 @@ class FirestoreOrderService {
     await _walletTxCol(userId).doc(tx.id).set(tx.toMap());
   }
 
+  /// Captures an order's escrowed payment as a single atomic write: marks
+  /// the order 'captured', sets the new wallet balance, and records the
+  /// transaction together. Previously these were three independent
+  /// fire-and-forget writes — if the app was force-closed between them
+  /// (e.g. balance debited but the order's paymentStatus write hadn't sent
+  /// yet), the order would still read as 'held' on next launch and get
+  /// captured a second time, debiting the wallet twice and driving the
+  /// balance negative. Batching makes it all-or-nothing: either every part
+  /// of the capture lands, or none of it does, so a retry on next launch is
+  /// always safe.
+  Future<void> captureOrderPayment({
+    required String orderId,
+    required String userId,
+    required double newBalance,
+    required WalletTransactionModel tx,
+  }) async {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(_col.doc(orderId), {'paymentStatus': 'captured'});
+    batch.set(
+      FirebaseFirestore.instance.collection('wallets').doc(userId),
+      {'balance': newBalance},
+      SetOptions(merge: true),
+    );
+    batch.set(_walletTxCol(userId).doc(tx.id), tx.toMap());
+    await batch.commit();
+  }
+
+  /// Same all-or-nothing guarantee as [captureOrderPayment], for wallet-only
+  /// operations that don't touch an order doc (top-up, transfer). Without
+  /// this, a force-close between the balance write and the transaction
+  /// write would leave a balance change with no matching history entry.
+  Future<void> updateWalletBalanceWithTransaction({
+    required String userId,
+    required double newBalance,
+    required WalletTransactionModel tx,
+  }) async {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(
+      FirebaseFirestore.instance.collection('wallets').doc(userId),
+      {'balance': newBalance},
+      SetOptions(merge: true),
+    );
+    batch.set(_walletTxCol(userId).doc(tx.id), tx.toMap());
+    await batch.commit();
+  }
+
   /// Real-time stream of menu item availability for a restaurant.
   /// Returns a map of itemId → isAvailable. Missing keys default to available.
   Stream<Map<String, bool>> streamMenuAvailability(String restaurantId) {

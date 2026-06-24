@@ -59,6 +59,16 @@ class AuthNotifier extends StateNotifier<UserModel?> {
   Future<void> _onAuthStateChanged(fb.User? fbUser) async {
     if (fbUser == null) {
       state = null;
+      // Reset the shared placeholder too — otherwise any screen reading it
+      // directly (instead of authProvider) keeps showing the previous
+      // signed-out user's id/name/email indefinitely.
+      MockDataService.currentUser = const UserModel(
+        id: '',
+        name: '',
+        email: '',
+        universityId: '',
+        role: UserRole.student,
+      );
       _ref.read(authLoadingProvider.notifier).state = false;
       return;
     }
