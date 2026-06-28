@@ -153,6 +153,7 @@ class FirestoreOrderService {
     DateTime? estimatedDelivery,
     double discount = 0,
     String? deliveryAddress,
+    DateTime? scheduledFor,
   }) async {
     await _col.doc(orderId).set({
       'id': orderId,
@@ -186,6 +187,7 @@ class FirestoreOrderService {
       'estimatedDelivery': estimatedDelivery != null
           ? Timestamp.fromDate(estimatedDelivery)
           : null,
+      'scheduledFor': scheduledFor != null ? Timestamp.fromDate(scheduledFor) : null,
     });
   }
 
@@ -499,6 +501,7 @@ class FirestoreOrderService {
       ),
       noDriversAvailable: d['noDriversAvailable'] as bool? ?? false,
       deliveryAddress: d['deliveryAddress'] as String?,
+      scheduledFor: (d['scheduledFor'] as Timestamp?)?.toDate(),
     );
   }
 

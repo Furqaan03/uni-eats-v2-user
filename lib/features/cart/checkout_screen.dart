@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/theme/colors.dart';
@@ -37,8 +38,13 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 /// Previously hardcoded to 2.50, which didn't match the actual agreed rate.
 const kDeliveryFee = 5.0;
 
+/// Minimum lead time for a scheduled order — the kitchen needs at least this
+/// long between placing the order and the requested pickup/delivery time.
+const kScheduleLeadTime = Duration(minutes: 25);
+
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   DeliveryType _deliveryType = DeliveryType.delivery;
+  DateTime? _scheduledFor;
   final _voucherCtrl = TextEditingController();
   String? _appliedVoucher;
   double _voucherDiscount = 0;
@@ -78,6 +84,46 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   void _removeVoucher() {
     setState(() { _appliedVoucher = null; _voucherDiscount = 0; _voucherError = null; _voucherCtrl.clear(); });
+  }
+
+  /// Lets the customer schedule this order for a future pickup/delivery
+  /// time instead of ASAP — must be at least [kScheduleLeadTime] from now,
+  /// matching `#SP`/`#SD` order numbers' meaning at place-order time.
+  Future<void> _pickScheduleTime(BuildContext context) async {
+    final now = DateTime.now();
+    final earliest = now.add(kScheduleLeadTime);
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: earliest,
+      firstDate: earliest,
+      lastDate: now.add(const Duration(days: 7)),
+    );
+    if (date == null) return;
+    if (!context.mounted) return;
+
+    final initialTime = TimeOfDay.fromDateTime(
+      // If they picked today, default the time picker to the earliest
+      // allowed slot rather than the current clock time (which would be
+      // too soon and get rejected below anyway).
+      date.year == earliest.year && date.month == earliest.month && date.day == earliest.day
+          ? earliest
+          : DateTime(date.year, date.month, date.day, 12),
+    );
+    final time = await showTimePicker(context: context, initialTime: initialTime);
+    if (time == null) return;
+
+    final picked = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (picked.isBefore(earliest)) {
+      if (context.mounted) {
+        UniToast.show(
+          context,
+          'Please pick a time at least ${kScheduleLeadTime.inMinutes} minutes from now.',
+        );
+      }
+      return;
+    }
+    setState(() => _scheduledFor = picked);
   }
 
   /// Drivers are online but every one of them is already at capacity —
@@ -413,6 +459,65 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 20),
+                Text(
+                  'When?',
+                  style: AppTypography.subheading.copyWith(color: textPrimary),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _WhenChip(
+                        icon: Icons.bolt,
+                        label: 'ASAP',
+                        isSelected: _scheduledFor == null,
+                        onTap: () => setState(() => _scheduledFor = null),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _WhenChip(
+                        icon: Icons.schedule,
+                        label: 'Schedule',
+                        isSelected: _scheduledFor != null,
+                        onTap: () => _pickScheduleTime(context),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_scheduledFor != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.event_available, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            (_deliveryType == DeliveryType.pickup ? 'Ready for pickup at ' : 'Arriving around ') +
+                                DateFormat('MMM d, h:mm a').format(_scheduledFor!),
+                            style: AppTypography.body.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _scheduledFor = null),
+                          child: Icon(Icons.close, size: 16, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Text(
                   'Payment Method',
@@ -683,8 +788,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _isPlacingOrder = true);
 
     final orderId = const Uuid().v4().substring(0, 8).toUpperCase();
-    final _rawNum = (1000 + orderId.hashCode.abs() % 9000).toString();
-    final orderNumber = '#${_deliveryType == DeliveryType.pickup ? 'P' : 'D'}$_rawNum';
+    final rawNum = (1000 + orderId.hashCode.abs() % 9000).toString();
+    final prefix = _scheduledFor != null
+        ? (_deliveryType == DeliveryType.pickup ? 'SP' : 'SD')
+        : (_deliveryType == DeliveryType.pickup ? 'P' : 'D');
+    final orderNumber = '#$prefix$rawNum';
     final restaurantId = cart.first.item.restaurantId;
     final allRestaurants = ref.read(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
     final restaurant = allRestaurants
@@ -739,9 +847,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cartSubtotal = ref.read(cartTotalProvider);
     final deliveryFee = _deliveryType == DeliveryType.delivery ? kDeliveryFee : 0.0;
     final subtotal = cartSubtotal;
-    final estimatedDelivery = DateTime.now().add(
-      Duration(minutes: restaurant.deliveryTimeMin + 5),
-    );
+    final estimatedDelivery = _scheduledFor ??
+        DateTime.now().add(Duration(minutes: restaurant.deliveryTimeMin + 5));
 
     final order = OrderModel(
       id: orderId,
@@ -757,6 +864,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       deliveryType: _deliveryType,
       createdAt: DateTime.now(),
       estimatedDelivery: estimatedDelivery,
+      scheduledFor: _scheduledFor,
       deliveryAddress: _deliveryType == DeliveryType.delivery && _selectedLocation != null
           ? '${_selectedLocation!.label} — ${_selectedLocation!.address}'
           : null,
@@ -821,6 +929,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           estimatedDelivery: estimatedDelivery,
           discount: _voucherDiscount,
           deliveryAddress: order.deliveryAddress,
+          scheduledFor: _scheduledFor,
         );
       } catch (e) {
         // Order is still visible locally; Firestore write failed silently here.
@@ -926,6 +1035,61 @@ class _LocationPickerSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WhenChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _WhenChip({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.12)
+              : Theme.of(context).cardTheme.color,
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : isDark
+                    ? AppColors.darkBorder
+                    : AppColors.lightBorder,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: isSelected ? AppColors.primary : textPrimary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTypography.subheading.copyWith(
+                color: isSelected ? AppColors.primary : textPrimary,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

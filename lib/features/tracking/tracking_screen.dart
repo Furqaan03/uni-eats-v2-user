@@ -84,6 +84,13 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
         allOrders.first;
 
     final isDelivering = order.status == OrderStatus.delivering;
+    // The map should only show this order once an actual driver has
+    // accepted it (driverId set) — before that (still placed/awaitingDriver)
+    // or once cancelled, there's no real driver/route to show, so the map
+    // stays empty instead of displaying a destination pin for an order
+    // nobody's actually driving yet.
+    final orderVisibleOnMap =
+        order.driverId != null && order.status != OrderStatus.cancelled;
 
     return Scaffold(
       body: Stack(
@@ -104,8 +111,10 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
                       child: CustomPaint(
                         painter: CampusMapPainter(
                           locations: MockDataService.campusLocations,
-                          driverPosition: isDelivering ? driverPos : null,
-                          destinationPosition: const Offset(0.62, 0.40),
+                          driverPosition:
+                              orderVisibleOnMap && isDelivering ? driverPos : null,
+                          destinationPosition:
+                              orderVisibleOnMap ? const Offset(0.62, 0.40) : null,
                         ),
                         size: Size.infinite,
                       ),

@@ -69,6 +69,10 @@ class OrderModel {
   // Free-text drop-off label the customer picked at checkout, e.g.
   // "Home — Building B3, Room 204". Null for pickup orders.
   final String? deliveryAddress;
+  // Set when the customer scheduled this order for a future pickup/delivery
+  // time (at least kScheduleLeadTime ahead of placing it) instead of ASAP.
+  // Null means a normal, immediate order.
+  final DateTime? scheduledFor;
 
   const OrderModel({
     required this.id,
@@ -94,6 +98,7 @@ class OrderModel {
     this.paymentStatus = PaymentStatus.held,
     this.noDriversAvailable = false,
     this.deliveryAddress,
+    this.scheduledFor,
   });
 
   OrderModel copyWith({
@@ -120,6 +125,7 @@ class OrderModel {
     PaymentStatus? paymentStatus,
     bool? noDriversAvailable,
     String? deliveryAddress,
+    DateTime? scheduledFor,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -145,6 +151,7 @@ class OrderModel {
       paymentStatus: paymentStatus ?? this.paymentStatus,
       noDriversAvailable: noDriversAvailable ?? this.noDriversAvailable,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      scheduledFor: scheduledFor ?? this.scheduledFor,
     );
   }
 

@@ -122,8 +122,6 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                               : () => setState(
                                     () => _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1),
                                   ),
-                          onTopUpAmount: (amount) => _showTopUpSheet(context, ref, initialAmount: amount),
-                          onCustomTopUp: () => _showTopUpSheet(context, ref),
                         ),
                       _WalletTab.insights => _InsightsTab(isDark: isDark),
                       _WalletTab.transactions => _TransactionsTab(
@@ -719,16 +717,12 @@ class _SectionLabel extends StatelessWidget {
 
 class _OverviewTab extends StatelessWidget {
   final bool isDark;
-  final ValueChanged<double> onTopUpAmount;
-  final VoidCallback onCustomTopUp;
   final DateTime selectedMonth;
   final VoidCallback onPrevMonth;
   final VoidCallback? onNextMonth;
 
   const _OverviewTab({
     required this.isDark,
-    required this.onTopUpAmount,
-    required this.onCustomTopUp,
     required this.selectedMonth,
     required this.onPrevMonth,
     required this.onNextMonth,
@@ -844,27 +838,6 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
         _BudgetTracker(isDark: isDark),
-        _SectionLabel(text: 'Quick Top-up', isDark: isDark),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final amount in [20.0, 50.0, 100.0, 200.0])
-                _TopupChip(
-                  label: 'QAR ${amount.toStringAsFixed(0)}',
-                  isDark: isDark,
-                  onTap: () => onTopUpAmount(amount),
-                ),
-              _TopupChip(
-                label: 'Custom',
-                isDark: isDark,
-                onTap: onCustomTopUp,
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: 8),
       ],
     );
@@ -1134,32 +1107,6 @@ class _BudgetTracker extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TopupChip extends StatelessWidget {
-  final String label;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _TopupChip({required this.label, required this.isDark, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkSurface3 : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
-        ),
-        child: Text(label, style: AppTypography.caption.copyWith(color: textSecondary, fontWeight: FontWeight.w700, fontSize: 10)),
       ),
     );
   }
@@ -1926,160 +1873,289 @@ class _TopUpSheetState extends State<_TopUpSheet> {
     return Consumer(
       builder: (context, ref, _) {
         final currentBalance = ref.watch(walletBalanceProvider);
+        final newBalance = currentBalance + (_selectedAmount > 0 ? _selectedAmount : 0);
+
         return Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 20,
-            left: 20,
-            right: 20,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkSurface3 : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Top Up Wallet',
-                style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 14),
-              ),
-              const SizedBox(height: 3),
-              Text.rich(
-                TextSpan(
-                  style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 10),
-                  children: [
-                    const TextSpan(text: 'Current balance: '),
-                    TextSpan(
-                      text: CurrencyFormatter.format(currentBalance),
-                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // QPay-branded header band — makes it explicit which payment
+              // rail this top-up goes through, not just a generic "add money".
+              Container(
+                margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8B0000), Color(0xFFC0392B)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
                   children: [
-                    Text('QAR', style: AppTypography.subheading.copyWith(color: textSecondary, fontSize: 13)),
-                    const SizedBox(width: 8),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.credit_card, size: 18, color: Colors.white),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: TextField(
-                        controller: _amountCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        onChanged: _onAmountChanged,
-                        style: AppTypography.heading.copyWith(color: textPrimary, fontSize: 18),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 8),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Top Up via QPay',
+                            style: AppTypography.subheading.copyWith(color: Colors.white, fontSize: 14),
+                          ),
+                          Text(
+                            'Secure top-up to your Uni Eats Wallet',
+                            style: AppTypography.caption.copyWith(color: Colors.white70, fontSize: 9),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 7,
-                runSpacing: 7,
-                children: [20.0, 50.0, 100.0, 200.0].map((amount) {
-                  final selected = _selectedAmount == amount;
-                  return GestureDetector(
-                    onTap: () => _selectPreset(amount),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: selected ? AppColors.primary.withOpacity(0.15) : (isDark ? AppColors.darkSurface2 : Colors.white),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: selected ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Amount',
+                      style: AppTypography.caption.copyWith(
+                        color: textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        letterSpacing: 0.4,
                       ),
-                      child: Text(
-                        amount.toStringAsFixed(0),
-                        style: AppTypography.caption.copyWith(
-                          color: selected ? AppColors.primary : textSecondary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _selectedAmount > 0
+                              ? AppColors.primary.withOpacity(0.4)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Text('QAR', style: AppTypography.subheading.copyWith(color: textSecondary, fontSize: 15)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _amountCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              onChanged: _onAmountChanged,
+                              style: AppTypography.displayMedium.copyWith(color: textPrimary, fontSize: 26),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(vertical: 10),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [20.0, 50.0, 100.0, 200.0].map((amount) {
+                        final selected = _selectedAmount == amount;
+                        return GestureDetector(
+                          onTap: () => _selectPreset(amount),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                            decoration: BoxDecoration(
+                              color: selected ? AppColors.primary : (isDark ? AppColors.darkSurface2 : Colors.white),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: selected ? AppColors.primary : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                              ),
+                              boxShadow: selected
+                                  ? [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 8)]
+                                  : null,
+                            ),
+                            child: Text(
+                              'QAR ${amount.toStringAsFixed(0)}',
+                              style: AppTypography.caption.copyWith(
+                                color: selected ? Colors.white : textSecondary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.darkSurface2 : AppColors.lightSurface2,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          _SummaryLine(
+                            label: 'Current balance',
+                            value: CurrencyFormatter.format(currentBalance),
+                            textSecondary: textSecondary,
+                            textPrimary: textPrimary,
+                          ),
+                          const SizedBox(height: 6),
+                          _SummaryLine(
+                            label: 'Top-up amount',
+                            value: '+ ${CurrencyFormatter.format(_selectedAmount > 0 ? _selectedAmount : 0)}',
+                            textSecondary: textSecondary,
+                            textPrimary: AppColors.primary,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Divider(color: isDark ? Colors.white12 : Colors.black12, height: 1),
+                          ),
+                          _SummaryLine(
+                            label: 'New balance',
+                            value: CurrencyFormatter.format(newBalance),
+                            textSecondary: textSecondary,
+                            textPrimary: textPrimary,
+                            bold: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(50),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(50),
+                          onTap: (_processing || _selectedAmount <= 0)
+                              ? null
+                              : () async {
+                                  setState(() => _processing = true);
+                                  await Future.delayed(const Duration(milliseconds: 700));
+                                  if (!mounted) return;
+                                  widget.onTopUp(_selectedAmount);
+                                  Navigator.pop(context);
+                                  UniToast.show(context, '✓ ${CurrencyFormatter.format(_selectedAmount)} added to wallet');
+                                },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              gradient: _selectedAmount > 0
+                                  ? const LinearGradient(colors: [Color(0xFF8B0000), Color(0xFFC0392B)])
+                                  : null,
+                              color: _selectedAmount > 0 ? null : Colors.grey.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            alignment: Alignment.center,
+                            child: _processing
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.lock_outline, size: 14, color: Colors.white),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Pay with QPay',
+                                        style: AppTypography.button.copyWith(color: Colors.white, fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(50),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(50),
-                    onTap: (_processing || _selectedAmount <= 0)
-                        ? null
-                        : () async {
-                            setState(() => _processing = true);
-                            await Future.delayed(const Duration(milliseconds: 700));
-                            if (!mounted) return;
-                            widget.onTopUp(_selectedAmount);
-                            Navigator.pop(context);
-                            UniToast.show(context, '✓ ${CurrencyFormatter.format(_selectedAmount)} added to wallet');
-                          },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      decoration: BoxDecoration(
-                        gradient: _selectedAmount > 0 ? AppColors.walletGradient : null,
-                        color: _selectedAmount > 0 ? null : Colors.grey.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(50),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Text(
+                          'Cancel',
+                          style: AppTypography.caption.copyWith(
+                            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
-                      alignment: Alignment.center,
-                      child: _processing
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(
-                              'Continue with QPay',
-                              style: AppTypography.button.copyWith(color: Colors.white, fontSize: 12),
-                            ),
                     ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: AppTypography.caption.copyWith(
-                      color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
-                      fontSize: 10,
-                    ),
-                  ),
+                  ],
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _SummaryLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color textSecondary;
+  final Color textPrimary;
+  final bool bold;
+
+  const _SummaryLine({
+    required this.label,
+    required this.value,
+    required this.textSecondary,
+    required this.textPrimary,
+    this.bold = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 11),
+        ),
+        Text(
+          value,
+          style: bold
+              ? AppTypography.subheading.copyWith(color: textPrimary, fontSize: 14)
+              : AppTypography.body.copyWith(color: textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ],
     );
   }
 }

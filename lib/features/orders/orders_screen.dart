@@ -1316,9 +1316,10 @@ class _CancelledTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(top: 12, bottom: 24),
       children: [
-        ...orders.map((o) => _HistoryCard(order: o, cancelled: true)),
+        // Moved to the top so it's seen every time this tab opens, rather
+        // than only after scrolling past every cancelled order to reach it.
         Container(
-          margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: AppColors.accent.withOpacity(0.08),
@@ -1348,6 +1349,7 @@ class _CancelledTab extends StatelessWidget {
             ],
           ),
         ),
+        ...orders.map((o) => _HistoryCard(order: o, cancelled: true)),
       ],
     );
   }
@@ -1858,6 +1860,40 @@ class _ReceiptSheet extends StatelessWidget {
                 controller: controller,
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 children: [
+                  // Cancellation policy — kept at the top so it's seen every
+                  // time this sheet opens, not just scrolled past.
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '⚡ Cancellation Policy',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 10,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Free cancellation before the restaurant starts preparing. Once preparation begins, cancellation is not available.',
+                          style: AppTypography.caption.copyWith(
+                            color: textMuted,
+                            fontSize: 9,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   // Restaurant + status
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -1896,9 +1932,44 @@ class _ReceiptSheet extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // Items
+                  // Order Details
                   _ReceiptSection(
-                    title: 'Items',
+                    title: 'Order Details',
+                    isDark: isDark,
+                    child: Column(
+                      children: [
+                        _ReceiptRow(label: 'Order ID', value: order.orderNumber, muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        const SizedBox(height: 6),
+                        _ReceiptRow(label: 'Date', value: date, muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        const SizedBox(height: 6),
+                        _ReceiptRow(label: 'Payment', value: 'Uni Eats Wallet', muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        const SizedBox(height: 6),
+                        _ReceiptRow(
+                          label: 'Delivery Type',
+                          value: order.deliveryType == DeliveryType.delivery ? 'Delivery' : 'Pickup',
+                          muted: true,
+                          textPrimary: textPrimary,
+                          textSecondary: textSecondary,
+                        ),
+                        if (order.estimatedDelivery != null) ...[
+                          const SizedBox(height: 6),
+                          _ReceiptRow(
+                            label: 'Estimated Time',
+                            value: DateFormat('h:mm a').format(order.estimatedDelivery!),
+                            muted: true,
+                            textPrimary: textPrimary,
+                            textSecondary: textSecondary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Item Details
+                  _ReceiptSection(
+                    title: 'Item Details',
                     isDark: isDark,
                     child: Column(
                       children: order.items.map((ci) => Padding(
@@ -1928,9 +1999,32 @@ class _ReceiptSheet extends StatelessWidget {
 
                   const SizedBox(height: 10),
 
-                  // Totals
+                  // Restaurant Details
                   _ReceiptSection(
-                    title: 'Summary',
+                    title: 'Restaurant Details',
+                    isDark: isDark,
+                    child: Column(
+                      children: [
+                        _ReceiptRow(label: 'Restaurant', value: order.restaurantName, muted: true, textPrimary: textPrimary, textSecondary: textSecondary),
+                        const SizedBox(height: 6),
+                        _ReceiptRow(
+                          label: order.deliveryType == DeliveryType.delivery ? 'Delivered To' : 'Pickup From',
+                          value: order.deliveryType == DeliveryType.delivery
+                              ? (order.deliveryAddress ?? 'Campus')
+                              : order.restaurantName,
+                          muted: true,
+                          textPrimary: textPrimary,
+                          textSecondary: textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Bill Details
+                  _ReceiptSection(
+                    title: 'Bill Details',
                     isDark: isDark,
                     child: Column(
                       children: [
@@ -1943,39 +2037,6 @@ class _ReceiptSheet extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         _ReceiptRow(label: 'Total', value: CurrencyFormatter.format(order.total), muted: false, textPrimary: textPrimary, textSecondary: textSecondary),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Payment
-                  _ReceiptSection(
-                    title: 'Payment',
-                    isDark: isDark,
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.walletGradient,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Noqoody',
-                            style: AppTypography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 9),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Uni Eats Wallet',
-                          style: AppTypography.body.copyWith(color: textPrimary, fontSize: 12),
-                        ),
-                        const Spacer(),
-                        Text(
-                          CurrencyFormatter.format(order.total),
-                          style: AppTypography.subheading.copyWith(color: AppColors.primary, fontSize: 13),
-                        ),
                       ],
                     ),
                   ),

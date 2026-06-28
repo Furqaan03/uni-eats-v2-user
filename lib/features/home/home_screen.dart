@@ -20,6 +20,7 @@ import 'providers/notifications_provider.dart';
 import 'widgets/campus_map_preview.dart';
 import 'widgets/category_chips.dart';
 import 'widgets/flash_sale_banner.dart';
+import 'widgets/trending_item_card.dart';
 import 'widgets/wallet_mini_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -135,6 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final mutedColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
     final balance = ref.watch(walletBalanceProvider);
     final restaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
+    final trendingItems = ref.watch(trendingMenuItemsProvider);
 
     final filteredRestaurants = _applySearchAndFilter(_baseList(restaurants));
 
@@ -257,25 +259,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (_searchQuery.isEmpty) ...[
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 160,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: restaurants.length,
-                  itemBuilder: (context, index) {
-                    final restaurant = restaurants[index];
-                    return RestaurantCard(
-                      restaurant: restaurant,
-                      onTap: () => context.push('/restaurant/${restaurant.id}'),
-                      width: 170,
-                    );
-                  },
-                ),
+                height: 168,
+                child: trendingItems.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No trending items yet',
+                          style: AppTypography.caption.copyWith(color: mutedColor),
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: trendingItems.length,
+                        itemBuilder: (context, index) {
+                          final trending = trendingItems[index];
+                          return TrendingItemCard(
+                            item: trending.item,
+                            restaurant: trending.restaurant,
+                            onTap: () => context.push('/restaurant/${trending.restaurant.id}'),
+                          );
+                        },
+                      ),
               ),
             ),
             SliverToBoxAdapter(
               child: SectionHeader(
-                title: '⭐ Top Rated',
+                title: '⭐ Top Rated Restaurants',
                 actionText: 'See all',
                 onAction: _showTopRated,
               ),
