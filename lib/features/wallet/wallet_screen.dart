@@ -103,7 +103,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         );
                       },
                     ),
-                    _QPayButton(onTap: () => _showTopUpSheet(context, ref)),
+                    const SizedBox(height: 16),
                     _SegmentedTabs(
                       selected: _tab,
                       isDark: isDark,
@@ -172,8 +172,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _TransferSheet(
         onTransfer: (amount, recipient) {
-          final error = ref.read(walletBalanceProvider.notifier).transfer(amount, recipient: recipient);
-          return error;
+          return ref.read(walletBalanceProvider.notifier).transfer(amount, recipient: recipient);
         },
       ),
     );
@@ -532,72 +531,6 @@ class _QuickActionButton extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QPayButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _QPayButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF8B0000), Color(0xFFC0392B)]),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.credit_card, size: 16, color: Colors.white),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pay via QPay',
-                        style: AppTypography.caption.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11,
-                        ),
-                      ),
-                      Text(
-                        'Top up instantly · Qatar bank cards',
-                        style: AppTypography.caption.copyWith(
-                          color: Colors.white.withOpacity(0.65),
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 16, color: Colors.white.withOpacity(0.5)),
-              ],
-            ),
           ),
         ),
       ),
@@ -1525,7 +1458,7 @@ class _StatementRow extends StatelessWidget {
 
 class _TransferSheet extends StatefulWidget {
   /// Returns null on success, an error message on failure.
-  final String? Function(double amount, String recipient) onTransfer;
+  final Future<String?> Function(double amount, String recipient) onTransfer;
 
   const _TransferSheet({required this.onTransfer});
 
@@ -1568,10 +1501,9 @@ class _TransferSheetState extends State<_TransferSheet> {
       _error = null;
       _processing = true;
     });
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
 
-    final result = widget.onTransfer(amount, recipient);
+    final result = await widget.onTransfer(amount, recipient);
+    if (!mounted) return;
     if (result != null) {
       setState(() {
         _processing = false;
@@ -1751,6 +1683,7 @@ class _TransactionTile extends StatelessWidget {
     if (tx.type == TransactionType.topUp) return '⬆️';
     if (tx.type == TransactionType.refund) return '↩️';
     if (tx.type == TransactionType.transferOut) return '↗️';
+    if (tx.type == TransactionType.transferIn) return '↙️';
     final desc = (tx.description ?? '').toLowerCase();
     if (desc.contains('hortons') || desc.contains('caribou') || desc.contains('coffee')) return '☕';
     if (desc.contains('oakberry') || desc.contains('healthy')) return '🥗';
@@ -1893,17 +1826,11 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // QPay-branded header band — makes it explicit which payment
-              // rail this top-up goes through, not just a generic "add money".
               Container(
                 margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF8B0000), Color(0xFFC0392B)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppColors.walletGradient,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -1916,7 +1843,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(Icons.credit_card, size: 18, color: Colors.white),
+                      child: const Icon(Icons.account_balance_wallet_rounded, size: 18, color: Colors.white),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1924,11 +1851,11 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Top Up via QPay',
+                            'Top Up Wallet',
                             style: AppTypography.subheading.copyWith(color: Colors.white, fontSize: 14),
                           ),
                           Text(
-                            'Secure top-up to your Uni Eats Wallet',
+                            'Add funds to your Uni Eats Wallet',
                             style: AppTypography.caption.copyWith(color: Colors.white70, fontSize: 9),
                           ),
                         ],
@@ -2073,9 +2000,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             decoration: BoxDecoration(
-                              gradient: _selectedAmount > 0
-                                  ? const LinearGradient(colors: [Color(0xFF8B0000), Color(0xFFC0392B)])
-                                  : null,
+                              gradient: _selectedAmount > 0 ? AppColors.walletGradient : null,
                               color: _selectedAmount > 0 ? null : Colors.grey.withOpacity(0.3),
                               borderRadius: BorderRadius.circular(50),
                             ),
@@ -2092,7 +2017,7 @@ class _TopUpSheetState extends State<_TopUpSheet> {
                                       const Icon(Icons.lock_outline, size: 14, color: Colors.white),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'Pay with QPay',
+                                        'Top Up Wallet',
                                         style: AppTypography.button.copyWith(color: Colors.white, fontSize: 13),
                                       ),
                                     ],
