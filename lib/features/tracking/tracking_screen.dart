@@ -65,32 +65,40 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
+    // This screen is delivery tracking specifically — pickup orders have no
+    // driver/route to show, and a stale cancelled/delivered order has no
+    // business being displayed here just because it's the only thing in the
+    // list. Previously this fell back to `allOrders.first` when nothing was
+    // active, which could surface a long-finished or cancelled order as if
+    // it were still being tracked. Empty unless there's a real, currently
+    // active delivery order.
     final allOrders = ref.watch(ordersProvider);
-    if (allOrders.isEmpty) {
+    final activeDeliveryOrders = allOrders
+        .where((o) => o.deliveryType == DeliveryType.delivery && o.isActive)
+        .toList();
+
+    if (activeDeliveryOrders.isEmpty) {
       return Scaffold(
         body: Center(
           child: Text(
-            'No orders to track yet.',
+            'No active deliveries right now.',
             style: AppTypography.body.copyWith(color: textSecondary),
           ),
         ),
       );
     }
 
-    final order = allOrders.cast<OrderModel?>().firstWhere(
-          (o) => o!.status == OrderStatus.delivering,
-          orElse: () => allOrders.cast<OrderModel?>().firstWhere((o) => o!.isActive, orElse: () => null),
-        ) ??
-        allOrders.first;
+    final order = activeDeliveryOrders.firstWhere(
+      (o) => o.status == OrderStatus.delivering,
+      orElse: () => activeDeliveryOrders.first,
+    );
 
     final isDelivering = order.status == OrderStatus.delivering;
-    // The map should only show this order once an actual driver has
-    // accepted it (driverId set) — before that (still placed/awaitingDriver)
-    // or once cancelled, there's no real driver/route to show, so the map
-    // stays empty instead of displaying a destination pin for an order
-    // nobody's actually driving yet.
-    final orderVisibleOnMap =
-        order.driverId != null && order.status != OrderStatus.cancelled;
+    // `order` is always an active delivery order at this point (cancelled
+    // orders never reach here — filtered out above), but the destination/
+    // driver marker still only appears once an actual driver has accepted
+    // it (driverId set) — before that, there's no real route to show.
+    final orderVisibleOnMap = order.driverId != null;
 
     return Scaffold(
       body: Stack(
