@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/profile/providers/preferences_provider.dart';
 import '../../features/restaurant/providers/restaurant_status_provider.dart';
 import '../../models/restaurant_model.dart';
 import '../theme/colors.dart';
@@ -24,6 +25,7 @@ class RestaurantListTile extends ConsumerWidget {
     final mutedColor = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
     final status = ref.watch(restaurantStatusProvider(restaurant.id)).valueOrNull ??
         RestaurantStatus(isOpen: restaurant.isOpen, isBusy: restaurant.isBusy);
+    final isFavorite = ref.watch(favoriteRestaurantIdsProvider).contains(restaurant.id);
 
     return GestureDetector(
       onTap: onTap,
@@ -82,7 +84,18 @@ class RestaurantListTile extends ConsumerWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: () => ref.read(favoriteRestaurantIdsProvider.notifier).toggle(restaurant.id),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  size: 20,
+                  color: isFavorite ? AppColors.danger : mutedColor,
+                ),
+              ),
+            ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [

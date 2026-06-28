@@ -14,6 +14,7 @@ import '../../core/theme/typography.dart';
 import '../../core/widgets/uni_toast.dart';
 import '../../models/order_model.dart';
 import '../../utils/currency_formatter.dart';
+import '../cart/cart_restaurant_guard.dart';
 import '../cart/providers/cart_provider.dart';
 import 'providers/orders_provider.dart';
 
@@ -286,6 +287,85 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+const _kCancelReasons = [
+  'Changed my mind',
+  'Order is taking too long',
+  'Ordered by mistake',
+  'Found a better option',
+  'Other',
+];
+
+/// Shows the cancellation reason picker, then cancels through
+/// `OrdersNotifier.cancelOrder()` — the only path that both marks the order
+/// locally-cancelled (so Firestore can't resurrect it) AND pushes the
+/// cancellation to Firestore, which is what the vendor app actually reads.
+/// A prior version of this flow called `updateOrder()` directly for one of
+/// the two "Cancel" buttons, which only ever touched local state — the
+/// vendor app never learned the order was cancelled and it stayed live in
+/// their queue forever.
+Future<void> _confirmAndCancelOrder(BuildContext context, WidgetRef ref, OrderModel order) async {
+  String selectedReason = _kCancelReasons.first;
+  final otherCtrl = TextEditingController();
+
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (_, setS) => AlertDialog(
+        title: const Text('Cancel Order?'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('This cannot be undone. Why are you cancelling?'),
+              const SizedBox(height: 8),
+              ..._kCancelReasons.map((reason) => RadioListTile<String>(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(reason, style: const TextStyle(fontSize: 13)),
+                    value: reason,
+                    groupValue: selectedReason,
+                    onChanged: (v) => setS(() => selectedReason = v!),
+                  )),
+              if (selectedReason == 'Other')
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: TextField(
+                    controller: otherCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Tell us more (optional)',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Order'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel Order', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (confirmed != true) return;
+
+  final reasonText = selectedReason == 'Other' && otherCtrl.text.trim().isNotEmpty
+      ? otherCtrl.text.trim()
+      : selectedReason;
+
+  ref.read(ordersProvider.notifier).cancelOrder(order.id, reason: reasonText);
+  if (context.mounted) UniToast.show(context, 'Order cancelled');
+}
+
 class _ActiveOrderCard extends ConsumerWidget {
   final OrderModel order;
 
@@ -298,37 +378,6 @@ class _ActiveOrderCard extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ActiveDetailSheet(order: order),
-    );
-  }
-
-  void _cancelOrder(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Order?'),
-        content: const Text(
-            'Are you sure you want to cancel this order? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Keep Order'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(ordersProvider.notifier).updateOrder(
-                    order.copyWith(
-                      status: OrderStatus.cancelled,
-                      cancelReason: 'Cancelled by customer',
-                    ),
-                  );
-              UniToast.show(context, 'Order cancelled');
-            },
-            child: const Text('Cancel Order',
-                style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -606,7 +655,7 @@ class _ActiveOrderCard extends ConsumerWidget {
                         label: 'Cancel',
                         icon: Icons.close_rounded,
                         primary: false,
-                        onTap: () => _cancelOrder(context, ref),
+                        onTap: () => _confirmAndCancelOrder(context, ref, order),
                         danger: true,
                       ),
                     ),
@@ -937,33 +986,7 @@ class _ActiveDetailSheet extends ConsumerWidget {
                             danger: true,
                             onTap: () {
                               Navigator.pop(context);
-                              showDialog(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Cancel Order?'),
-                                  content: const Text(
-                                      'Are you sure? This cannot be undone.'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: const Text('Keep Order'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(ctx);
-                                        ref
-                                            .read(ordersProvider.notifier)
-                                            .cancelOrder(order.id);
-                                        UniToast.show(
-                                            context, 'Order cancelled');
-                                      },
-                                      child: const Text('Cancel',
-                                          style:
-                                              TextStyle(color: Colors.red)),
-                                    ),
-                                  ],
-                                ),
-                              );
+                              _confirmAndCancelOrder(context, ref, order); // ignore: discarded_futures
                             },
                           ),
                         ),
@@ -1499,14 +1522,31 @@ class _HistoryCard extends ConsumerWidget {
     );
   }
 
-  void _reorder(BuildContext context, WidgetRef ref) {
+  Future<void> _reorder(BuildContext context, WidgetRef ref) async {
+    if (order.items.isEmpty) return;
+    // First item decides whether the restaurant-switch confirmation fires;
+    // the rest are added directly afterward (cart guaranteed single-restaurant
+    // by that point).
+    final firstItem = order.items.first;
+    final added = await addToCartWithRestaurantGuard(
+      context,
+      ref,
+      firstItem.item,
+      note: firstItem.note,
+      newRestaurantName: order.restaurantName,
+    );
+    if (!added) return;
+
     final cart = ref.read(cartProvider.notifier);
-    for (final ci in order.items) {
+    for (var i = 1; i < firstItem.quantity; i++) {
+      cart.addItem(firstItem.item, note: firstItem.note);
+    }
+    for (final ci in order.items.skip(1)) {
       for (var i = 0; i < ci.quantity; i++) {
         cart.addItem(ci.item, note: ci.note);
       }
     }
-    UniToast.show(context, 'Added ${order.restaurantName} items to cart');
+    if (context.mounted) UniToast.show(context, 'Added ${order.restaurantName} items to cart');
   }
 
   void _showDetails(BuildContext context) {

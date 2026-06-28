@@ -117,6 +117,18 @@ class WalletNotifier extends StateNotifier<double> {
     return true;
   }
 
+  /// Shrinks (or grows) an existing hold to match an order's new total —
+  /// e.g. switching a stuck delivery order to pickup drops the delivery fee
+  /// from the total, but the hold map previously kept the original, larger
+  /// amount until the order's eventual capture/release, understating
+  /// availableBalanceProvider by the difference for as long as it sat
+  /// pending. No-op if this order has no active hold (already resolved).
+  void adjustHold(String orderId, double newAmount) {
+    if (!_holds.containsKey(orderId)) return;
+    _holds[orderId] = newAmount;
+    _syncHeldTotal();
+  }
+
   /// Re-registers a hold for an order that's still pending from a previous
   /// app session — called when restoring orders on startup.
   void restoreHold(String orderId, double amount) {

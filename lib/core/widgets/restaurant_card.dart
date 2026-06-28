@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/profile/providers/preferences_provider.dart';
 import '../../features/restaurant/providers/restaurant_status_provider.dart';
 import '../../models/restaurant_model.dart';
 import '../../utils/currency_formatter.dart';
@@ -26,6 +27,7 @@ class RestaurantCard extends ConsumerWidget {
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
     final status = ref.watch(restaurantStatusProvider(restaurant.id)).valueOrNull ??
         RestaurantStatus(isOpen: restaurant.isOpen, isBusy: restaurant.isBusy);
+    final isFavorite = ref.watch(favoriteRestaurantIdsProvider).contains(restaurant.id);
 
     return GestureDetector(
       onTap: onTap,
@@ -49,7 +51,30 @@ class RestaurantCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildImage(status),
+            Stack(
+              children: [
+                _buildImage(status),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: GestureDetector(
+                    onTap: () => ref.read(favoriteRestaurantIdsProvider.notifier).toggle(restaurant.id),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.4),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        size: 18,
+                        color: isFavorite ? AppColors.danger : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             Padding(
               padding: const EdgeInsets.all(10),
               child: Column(

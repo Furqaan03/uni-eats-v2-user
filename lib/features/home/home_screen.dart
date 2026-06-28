@@ -209,8 +209,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   controller: _searchController,
                   onChanged: (q) => setState(() => _searchQuery = q),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 WalletMiniCard(balance: balance),
+                const SizedBox(height: 8),
                 _ActiveOrdersBanner(
                   orders: ref.watch(activeOrdersProvider),
                   onOrderTap: (order) {
@@ -218,11 +219,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     context.go('/orders');
                   },
                 ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Category',
+                    style: AppTypography.subheading.copyWith(
+                      color: textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 CategoryChips(
                   selected: _selectedCategory,
                   onSelected: (c) => setState(() => _selectedCategory = c),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 if (_searchQuery.isEmpty) ...[
                   SectionHeader(
                     title: '⚡ Flash Sale',
@@ -371,6 +385,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   List<RestaurantModel> _applyFilter(List<RestaurantModel> restaurants) {
     switch (_selectedFilter) {
+      case 'All':
+        return restaurants;
       case 'Nearest':
         final sorted = List<RestaurantModel>.of(restaurants)
           ..sort((a, b) => a.deliveryTimeMin.compareTo(b.deliveryTimeMin));
@@ -893,6 +909,7 @@ class _FilterChips extends StatelessWidget {
   const _FilterChips({required this.selected, required this.onSelected});
 
   static const filters = [
+    'All',
     'Nearest',
     'Open Now',
     'Rating 4+',

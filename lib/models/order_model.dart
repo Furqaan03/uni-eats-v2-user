@@ -61,6 +61,14 @@ class OrderModel {
   final String? cancelReason;
   final bool isRefunded;
   final PaymentStatus paymentStatus;
+  // True when a driver gave up the delivery (or every online driver
+  // declined) and nobody else is free to take over. The order stays
+  // 'awaitingDriver' — this is purely a "needs the customer's input" signal
+  // surfaced as a banner: pick it up yourself, or cancel.
+  final bool noDriversAvailable;
+  // Free-text drop-off label the customer picked at checkout, e.g.
+  // "Home — Building B3, Room 204". Null for pickup orders.
+  final String? deliveryAddress;
 
   const OrderModel({
     required this.id,
@@ -84,6 +92,8 @@ class OrderModel {
     this.cancelReason,
     this.isRefunded = false,
     this.paymentStatus = PaymentStatus.held,
+    this.noDriversAvailable = false,
+    this.deliveryAddress,
   });
 
   OrderModel copyWith({
@@ -108,6 +118,8 @@ class OrderModel {
     String? cancelReason,
     bool? isRefunded,
     PaymentStatus? paymentStatus,
+    bool? noDriversAvailable,
+    String? deliveryAddress,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -131,6 +143,8 @@ class OrderModel {
       cancelReason: cancelReason ?? this.cancelReason,
       isRefunded: isRefunded ?? this.isRefunded,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      noDriversAvailable: noDriversAvailable ?? this.noDriversAvailable,
+      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
     );
   }
 

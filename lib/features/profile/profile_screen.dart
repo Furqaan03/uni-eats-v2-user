@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
@@ -15,6 +16,8 @@ import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
 import '../restaurant/providers/restaurants_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
+import 'providers/preferences_provider.dart';
+import 'widgets/location_pin_picker.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -25,10 +28,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _notifExpanded = false;
-  bool _notifOrders = true;
-  bool _notifPromos = true;
-  bool _notifDriver = true;
-  bool _notifLoyalty = false;
   String _language = 'EN';
   File? _avatarFile;
 
@@ -56,7 +55,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10)];
     final user = ref.watch(authProvider) ?? MockDataService.currentUser;
     final restaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
-    final walletBalance = ref.watch(availableBalanceProvider);
+    final walletBalance = ref.watch(walletBalanceProvider);
 
     return Scaffold(
       body: ListView(
@@ -466,7 +465,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ],
                       ),
                       GestureDetector(
-                        onTap: () => _copyReferralCode(context, user.name),
+                        onTap: () => _shareReferralCode(context, user.name),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
@@ -525,56 +524,64 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
             // Favourite Restaurants
             _SectionLabel(text: 'Favourite Restaurants', color: textMuted),
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: cardShadow,
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  _FavItem(
-                    emoji: '☕',
-                    name: restaurants[0].name,
-                    subtitle: '${restaurants[0].building} · ${restaurants[0].rating} ★',
-                    status: 'Open',
-                    statusColor: AppColors.primary,
-                    onTap: () => context.push('/restaurant/${restaurants[0].id}'),
-                  ),
-                  _Sep(isDark: isDark, inset: true),
-                  _FavItem(
-                    emoji: '🫐',
-                    name: restaurants[1].name,
-                    subtitle: '${restaurants[1].building} · ${restaurants[1].rating} ★',
-                    status: 'Open',
-                    statusColor: AppColors.primary,
-                    onTap: () => context.push('/restaurant/${restaurants[1].id}'),
-                  ),
-                  _Sep(isDark: isDark, inset: true),
-                  _FavItem(
-                    emoji: '🍕',
-                    name: restaurants[2].name,
-                    subtitle: '${restaurants[2].building} · ${restaurants[2].rating} ★',
-                    status: 'Busy',
-                    statusColor: AppColors.accent,
-                    onTap: () => context.push('/restaurant/${restaurants[2].id}'),
-                  ),
-                  GestureDetector(
-                    onTap: () => UniToast.show(context, 'Showing all favourites…'),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        'See all 6 favourites →',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.label.copyWith(color: AppColors.primary, fontSize: 9),
+            Builder(builder: (context) {
+              final favoriteIds = ref.watch(favoriteRestaurantIdsProvider);
+              final favourites =
+                  restaurants.where((r) => favoriteIds.contains(r.id)).toList();
+              const previewCount = 3;
+
+              return Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: cardShadow,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    if (favourites.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Text(
+                          'Tap the ♡ on any restaurant to favourite it',
+                          textAlign: TextAlign.center,
+                          style: AppTypography.caption.copyWith(color: textMuted, fontSize: 10),
+                        ),
+                      )
+                    else
+                      for (var i = 0; i < favourites.length && i < previewCount; i++) ...[
+                        if (i > 0) _Sep(isDark: isDark, inset: true),
+                        _FavItem(
+                          emoji: _favEmoji(favourites[i].category),
+                          name: favourites[i].name,
+                          subtitle: '${favourites[i].building} · ${favourites[i].rating} ★',
+                          status: 'Open',
+                          statusColor: AppColors.primary,
+                          isFavorite: true,
+                          onToggleFavorite: () => ref
+                              .read(favoriteRestaurantIdsProvider.notifier)
+                              .toggle(favourites[i].id),
+                          onTap: () => context.push('/restaurant/${favourites[i].id}'),
+                        ),
+                      ],
+                    if (favourites.length > previewCount)
+                      GestureDetector(
+                        onTap: () => _showAllFavourites(context, favourites),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'See all ${favourites.length} favourites →',
+                            textAlign: TextAlign.center,
+                            style:
+                                AppTypography.label.copyWith(color: AppColors.primary, fontSize: 9),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                ),
+              );
+            }),
 
             // Dietary Preferences
             _SectionLabel(text: 'Dietary Preferences', color: textMuted),
@@ -659,7 +666,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.credit_card_outlined,
                     iconColor: AppColors.accent,
                     label: 'Wallet & Top-up',
-                    value: CurrencyFormatter.format(user.walletBalance),
+                    value: CurrencyFormatter.format(walletBalance),
                     onTap: () => context.push('/wallet'),
                   ),
                   _Sep(isDark: isDark, inset: false),
@@ -667,7 +674,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.location_on_outlined,
                     iconColor: AppColors.primary,
                     label: 'Saved Locations',
-                    value: '2 saved',
+                    value: '${ref.watch(savedLocationsProvider).length} saved',
                     onTap: () => _showSavedLocations(context),
                   ),
                   _Sep(isDark: isDark, inset: false),
@@ -694,53 +701,65 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  _RowItem(
-                    icon: Icons.notifications_outlined,
-                    iconColor: AppColors.primary,
-                    label: 'Notifications',
-                    value: '3 active',
-                    valueColor: AppColors.primary,
-                    trailing: AnimatedRotation(
-                      turns: _notifExpanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                        size: 18,
-                      ),
-                    ),
-                    onTap: () => setState(() => _notifExpanded = !_notifExpanded),
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    child: _notifExpanded
-                        ? Column(
-                            children: [
-                              _NotifSubRow(
-                                label: 'Order Updates',
-                                value: _notifOrders,
-                                onChanged: (v) => setState(() => _notifOrders = v),
-                              ),
-                              _NotifSubRow(
-                                label: 'Promotions & Deals',
-                                value: _notifPromos,
-                                onChanged: (v) => setState(() => _notifPromos = v),
-                              ),
-                              _NotifSubRow(
-                                label: 'Driver Nearby',
-                                value: _notifDriver,
-                                onChanged: (v) => setState(() => _notifDriver = v),
-                              ),
-                              _NotifSubRow(
-                                label: 'Loyalty & Rewards',
-                                value: _notifLoyalty,
-                                onChanged: (v) => setState(() => _notifLoyalty = v),
-                                last: true,
-                              ),
-                            ],
-                          )
-                        : const SizedBox.shrink(),
-                  ),
+                  Builder(builder: (context) {
+                    final notifPrefs = ref.watch(notificationPrefsProvider);
+                    final notifNotifier = ref.read(notificationPrefsProvider.notifier);
+                    return Column(
+                      children: [
+                        _RowItem(
+                          icon: Icons.notifications_outlined,
+                          iconColor: AppColors.primary,
+                          label: 'Notifications',
+                          value: '${notifPrefs.activeCount} active',
+                          valueColor: AppColors.primary,
+                          trailing: AnimatedRotation(
+                            turns: _notifExpanded ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(
+                              Icons.keyboard_arrow_down,
+                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                              size: 18,
+                            ),
+                          ),
+                          onTap: () => setState(() => _notifExpanded = !_notifExpanded),
+                        ),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 200),
+                          child: _notifExpanded
+                              ? Column(
+                                  children: [
+                                    _NotifSubRow(
+                                      label: 'Order Updates',
+                                      value: notifPrefs.orderUpdates,
+                                      onChanged: (v) =>
+                                          notifNotifier.update((p) => p.copyWith(orderUpdates: v)),
+                                    ),
+                                    _NotifSubRow(
+                                      label: 'Promotions & Deals',
+                                      value: notifPrefs.promotions,
+                                      onChanged: (v) =>
+                                          notifNotifier.update((p) => p.copyWith(promotions: v)),
+                                    ),
+                                    _NotifSubRow(
+                                      label: 'Driver Nearby',
+                                      value: notifPrefs.driverNearby,
+                                      onChanged: (v) =>
+                                          notifNotifier.update((p) => p.copyWith(driverNearby: v)),
+                                    ),
+                                    _NotifSubRow(
+                                      label: 'Loyalty & Rewards',
+                                      value: notifPrefs.loyaltyRewards,
+                                      onChanged: (v) =>
+                                          notifNotifier.update((p) => p.copyWith(loyaltyRewards: v)),
+                                      last: true,
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    );
+                  }),
                   _Sep(isDark: isDark, inset: false),
                   _RowItem(
                     icon: Icons.brightness_6_outlined,
@@ -768,7 +787,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.map_outlined,
                     iconColor: AppColors.accent,
                     label: 'Default Drop-off',
-                    value: 'B3, Room 204',
+                    value: ref.watch(defaultDropoffProvider).name,
                     onTap: () => _showDropoffPicker(context),
                   ),
                 ],
@@ -918,15 +937,76 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  String _favEmoji(String category) {
+    final c = category.toLowerCase();
+    if (c.contains('coffee') || c.contains('café')) return '☕';
+    if (c.contains('dessert') || c.contains('bakery')) return '🍰';
+    if (c.contains('healthy') || c.contains('açaí')) return '🥗';
+    if (c.contains('drinks') || c.contains('cold')) return '🥤';
+    return '🍕';
+  }
+
+  void _showAllFavourites(BuildContext context, List<dynamic> favourites) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SheetWrapper(
+        title: 'All Favourites',
+        child: SizedBox(
+          height: 360,
+          child: ListView.separated(
+            itemCount: favourites.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) {
+              final r = favourites[i];
+              return _FavItem(
+                emoji: _favEmoji(r.category),
+                name: r.name,
+                subtitle: '${r.building} · ${r.rating} ★',
+                status: 'Open',
+                statusColor: AppColors.primary,
+                isFavorite: true,
+                onToggleFavorite: () =>
+                    ref.read(favoriteRestaurantIdsProvider.notifier).toggle(r.id),
+                onTap: () {
+                  Navigator.of(ctx, rootNavigator: true).pop();
+                  context.push('/restaurant/${r.id}');
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   String _referralCode(String name) {
     final base = name.split(' ').first.toUpperCase();
     return '${base}100';
   }
 
+  String _referralMessage(String code) =>
+      '🚨 Hurry — my 100-pt Uni Eats invite code expires soon!\n\n'
+      'Use "$code" when you sign up and we BOTH get free campus delivery '
+      'credit. Limited spots left this week, grab it now 👇\n\n'
+      'Download Uni Eats and enter "$code" at signup.';
+
+  /// "Tap to copy" puts the code on the clipboard (as promised) *and* opens
+  /// the share sheet with the full urgency message — previously this only
+  /// copied the bare code, with no actual message to send anyone.
   Future<void> _copyReferralCode(BuildContext context, String name) async {
     final code = _referralCode(name);
     await Clipboard.setData(ClipboardData(text: code));
-    if (context.mounted) UniToast.show(context, 'Code $code copied to clipboard!');
+    if (!context.mounted) return;
+    UniToast.show(context, 'Code $code copied — opening share…');
+    await Share.share(_referralMessage(code), subject: 'Your Uni Eats invite — code expires soon!');
+  }
+
+  Future<void> _shareReferralCode(BuildContext context, String name) async {
+    final code = _referralCode(name);
+    await Share.share(_referralMessage(code), subject: 'Your Uni Eats invite — code expires soon!');
   }
 
   // ── Edit Profile ──────────────────────────────────────────────────────────
@@ -1232,33 +1312,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // ── Default Drop-off ──────────────────────────────────────────────────────
 
   void _showDropoffPicker(BuildContext context) {
-    const locations = [
-      ('B1', 'Building 1 – Main Lobby'),
-      ('B2', 'Building 2 – Library Entrance'),
-      ('B3', 'Building 3 – Room 204'),
-      ('B4', 'Building 4 – Cafeteria'),
-      ('B5', 'Building 5 – Lab Wing'),
-      ('Student Centre', 'Ground Floor, Reception'),
-    ];
-
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        String selected = 'B3';
+        var selected = ref.read(defaultDropoffProvider);
         return StatefulBuilder(
           builder: (_, setS) => _SheetWrapper(
             title: 'Default Drop-off',
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ...locations.map((l) {
-                  final (code, name) = l;
-                  final active = selected == code;
+                ...kDropoffOptions.map((option) {
+                  final active = selected.code == option.code;
                   return GestureDetector(
-                    onTap: () => setS(() => selected = code),
+                    onTap: () => setS(() => selected = option),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -1275,7 +1345,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               size: 16, color: active ? AppColors.primary : Colors.grey),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(name,
+                            child: Text(option.name,
                                 style: AppTypography.body.copyWith(
                                   fontSize: 12,
                                   color: active ? AppColors.primary : null,
@@ -1292,8 +1362,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _SheetButton(
                   label: 'Save Location',
                   onTap: () {
+                    ref.read(defaultDropoffProvider.notifier).setOption(selected);
                     Navigator.pop(ctx);
-                    UniToast.show(context, 'Default drop-off set to $selected');
+                    UniToast.show(context, 'Default drop-off set to ${selected.name}');
                   },
                 ),
               ],
@@ -1835,36 +1906,33 @@ class _PrivacySection extends StatelessWidget {
 
 // ─────────────────────── SAVED LOCATIONS SHEET ───────────────────────────────
 
-class _SavedLocationsSheet extends StatefulWidget {
+class _SavedLocationsSheet extends ConsumerWidget {
   const _SavedLocationsSheet();
 
   @override
-  State<_SavedLocationsSheet> createState() => _SavedLocationsSheetState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locations = ref.watch(savedLocationsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
 
-class _SavedLocationsSheetState extends State<_SavedLocationsSheet> {
-  final List<Map<String, String>> _locations = [
-    {'icon': '🏠', 'label': 'Home', 'address': 'Building B3, Room 204'},
-    {'icon': '📚', 'label': 'Library', 'address': 'UDST Main Library, 2nd Floor'},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
     return _SheetWrapper(
       title: 'Saved Locations',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ..._locations.asMap().entries.map((e) {
+          if (locations.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text('No saved locations yet',
+                  style: AppTypography.caption.copyWith(color: textMuted, fontSize: 11)),
+            ),
+          ...locations.asMap().entries.map((e) {
             final loc = e.value;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            final textPrimary = Theme.of(context).colorScheme.onSurface;
-            final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
-
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: GestureDetector(
-                onTap: () => _addOrEditLocation(context, index: e.key),
+                onTap: () => _addOrEditLocation(context, ref, index: e.key),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   decoration: BoxDecoration(
@@ -1874,28 +1942,29 @@ class _SavedLocationsSheetState extends State<_SavedLocationsSheet> {
                   ),
                   child: Row(
                     children: [
-                      Text(loc['icon']!, style: const TextStyle(fontSize: 20)),
+                      Text(loc.emoji, style: const TextStyle(fontSize: 20)),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(loc['label']!,
-                                style: AppTypography.subheading.copyWith(fontSize: 12, color: textPrimary)),
-                            Text(loc['address']!,
+                            Text(loc.label,
+                                style:
+                                    AppTypography.subheading.copyWith(fontSize: 12, color: textPrimary)),
+                            Text(loc.address,
                                 style: AppTypography.caption.copyWith(fontSize: 10, color: textMuted)),
                           ],
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => _addOrEditLocation(context, index: e.key),
+                        onTap: () => _addOrEditLocation(context, ref, index: e.key),
                         child: Icon(Icons.edit_outlined, size: 17, color: textMuted),
                       ),
                       const SizedBox(width: 14),
                       GestureDetector(
                         onTap: () {
-                          setState(() => _locations.removeAt(e.key));
-                          UniToast.show(context, '${loc['label']} removed');
+                          ref.read(savedLocationsProvider.notifier).removeAt(e.key);
+                          UniToast.show(context, '${loc.label} removed');
                         },
                         child: const Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
                       ),
@@ -1909,7 +1978,7 @@ class _SavedLocationsSheetState extends State<_SavedLocationsSheet> {
           _SheetButton(
             label: '+ Add Location',
             outlined: true,
-            onTap: () => _addOrEditLocation(context),
+            onTap: () => _addOrEditLocation(context, ref),
           ),
         ],
       ),
@@ -1918,48 +1987,93 @@ class _SavedLocationsSheetState extends State<_SavedLocationsSheet> {
 
   /// Opens a small edit form. [index] == null creates a new location;
   /// otherwise edits the existing one at that index.
-  void _addOrEditLocation(BuildContext context, {int? index}) {
-    final existing = index != null ? _locations[index] : null;
-    final labelCtr = TextEditingController(text: existing?['label'] ?? '');
-    final addressCtr = TextEditingController(text: existing?['address'] ?? '');
+  void _addOrEditLocation(BuildContext context, WidgetRef ref, {int? index}) {
+    final locations = ref.read(savedLocationsProvider);
+    final existing = index != null ? locations[index] : null;
+    final labelCtr = TextEditingController(text: existing?.label ?? '');
+    final addressCtr = TextEditingController(text: existing?.address ?? '');
+    var emoji = existing?.emoji ?? '📍';
+    double? pinX = existing?.mapX;
+    double? pinY = existing?.mapY;
 
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _SheetWrapper(
-        title: index != null ? 'Edit Location' : 'Add Location',
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SheetField(controller: labelCtr, label: 'Label (e.g. Home, Library)', icon: Icons.label_outline),
-            const SizedBox(height: 10),
-            _SheetField(controller: addressCtr, label: 'Address / Building', icon: Icons.location_on_outlined),
-            const SizedBox(height: 20),
-            _SheetButton(
-              label: 'Save Location',
-              onTap: () {
-                final label = labelCtr.text.trim();
-                final address = addressCtr.text.trim();
-                if (label.isEmpty || address.isEmpty) return;
-                setState(() {
-                  final entry = {
-                    'icon': existing?['icon'] ?? '📍',
-                    'label': label,
-                    'address': address,
-                  };
-                  if (index != null) {
-                    _locations[index] = entry;
-                  } else {
-                    _locations.add(entry);
-                  }
-                });
-                Navigator.of(context, rootNavigator: true).pop();
-                UniToast.show(context, index != null ? 'Location updated' : 'Location added');
-              },
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (_, setS) => _SheetWrapper(
+          title: index != null ? 'Edit Location' : 'Add Location',
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Icon',
+                      style: AppTypography.caption.copyWith(fontSize: 10, color: Colors.grey)),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: kLocationEmojiOptions.map((e) {
+                    final active = e == emoji;
+                    return GestureDetector(
+                      onTap: () => setS(() => emoji = e),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: active ? AppColors.primary.withOpacity(0.15) : Colors.transparent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: active ? AppColors.primary : Colors.grey.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(e, style: const TextStyle(fontSize: 16)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                _SheetField(
+                    controller: labelCtr, label: 'Label (e.g. Home, Office)', icon: Icons.label_outline),
+                const SizedBox(height: 10),
+                _SheetField(
+                    controller: addressCtr,
+                    label: 'Address / Building',
+                    icon: Icons.location_on_outlined),
+                const SizedBox(height: 14),
+                LocationPinPicker(
+                  initialX: pinX,
+                  initialY: pinY,
+                  onPinSet: (offset) => setS(() {
+                    pinX = offset.dx;
+                    pinY = offset.dy;
+                  }),
+                ),
+                const SizedBox(height: 16),
+                _SheetButton(
+                  label: 'Save Location',
+                  onTap: () {
+                    final label = labelCtr.text.trim();
+                    final address = addressCtr.text.trim();
+                    if (label.isEmpty || address.isEmpty) return;
+                    final entry =
+                        SavedLocation(emoji: emoji, label: label, address: address, mapX: pinX, mapY: pinY);
+                    if (index != null) {
+                      ref.read(savedLocationsProvider.notifier).updateAt(index, entry);
+                    } else {
+                      ref.read(savedLocationsProvider.notifier).add(entry);
+                    }
+                    Navigator.of(sheetCtx, rootNavigator: true).pop();
+                    UniToast.show(context, index != null ? 'Location updated' : 'Location added');
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2097,6 +2211,8 @@ class _FavItem extends StatelessWidget {
   final String status;
   final Color statusColor;
   final VoidCallback onTap;
+  final bool isFavorite;
+  final VoidCallback? onToggleFavorite;
 
   const _FavItem({
     required this.emoji,
@@ -2105,6 +2221,8 @@ class _FavItem extends StatelessWidget {
     required this.status,
     required this.statusColor,
     required this.onTap,
+    this.isFavorite = false,
+    this.onToggleFavorite,
   });
 
   @override
@@ -2149,6 +2267,20 @@ class _FavItem extends StatelessWidget {
               status,
               style: AppTypography.label.copyWith(color: statusColor, fontSize: 9),
             ),
+            const SizedBox(width: 4),
+            if (onToggleFavorite != null)
+              GestureDetector(
+                onTap: onToggleFavorite,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                    size: 22,
+                    color: isFavorite ? AppColors.danger : textSecondary,
+                  ),
+                ),
+              ),
+            const SizedBox(width: 2),
             Icon(
               Icons.chevron_right,
               size: 14,

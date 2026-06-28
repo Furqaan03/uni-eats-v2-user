@@ -13,6 +13,8 @@ import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
 import '../home/providers/notifications_provider.dart';
 import '../orders/providers/orders_provider.dart';
+import '../profile/providers/preferences_provider.dart';
+import '../profile/widgets/location_pin_picker.dart';
 import '../restaurant/providers/restaurant_status_provider.dart';
 import '../restaurant/providers/restaurants_provider.dart';
 import '../wallet/providers/wallet_provider.dart';
@@ -42,6 +44,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _voucherDiscount = 0;
   String? _voucherError;
   bool _isPlacingOrder = false;
+  SavedLocation? _selectedLocation;
+  bool _locationInitialized = false;
+  // Only nag once per visit to this screen — re-tapping Delivery after
+  // already confirming (or after bouncing to Pickup and back) shouldn't
+  // show the same "drivers are busy" prompt again.
+  bool _tightWarningAcknowledged = false;
 
   // Mock vouchers — in production these would come from Firestore per restaurant
   static const _mockVouchers = <String, (String type, double value, double min)>{
@@ -72,10 +80,176 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() { _appliedVoucher = null; _voucherDiscount = 0; _voucherError = null; _voucherCtrl.clear(); });
   }
 
+  /// Drivers are online but every one of them is already at capacity —
+  /// real capacity, just stretched thin, not the zero-drivers case (that's
+  /// `deliveryBlocked`, a hard stop). Ask once whether to wait it out or
+  /// switch to pickup instead, rather than silently letting the order
+  /// place into a queue that may take a while to clear.
+  Future<void> _confirmTightDelivery(BuildContext context) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Drivers Are Busy'),
+        content: const Text(
+          'All online drivers are currently at capacity. Your order may sit '
+          'longer than usual before one becomes free. Continue with delivery '
+          'anyway, or switch to pickup instead?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'pickup'),
+            child: const Text('Switch to Pickup'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            child: const Text('Continue Anyway'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == 'pickup') {
+      setState(() => _deliveryType = DeliveryType.pickup);
+    } else if (choice == 'continue') {
+      setState(() {
+        _deliveryType = DeliveryType.delivery;
+        _tightWarningAcknowledged = true;
+      });
+    }
+    // Dismissed without a choice (back button/tap outside) — leave selection
+    // untouched rather than assuming either answer.
+  }
+
   @override
   void dispose() {
     _voucherCtrl.dispose();
     super.dispose();
+  }
+
+  void _showLocationPicker(BuildContext context, List<SavedLocation> savedLocations) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textMuted = isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _LocationPickerSheet(
+        savedLocations: savedLocations,
+        selected: _selectedLocation,
+        onSelect: (loc) {
+          setState(() => _selectedLocation = loc);
+          Navigator.of(sheetCtx, rootNavigator: true).pop();
+        },
+        onAddNew: () {
+          Navigator.of(sheetCtx, rootNavigator: true).pop();
+          _showAddLocation(context);
+        },
+        mutedColor: textMuted,
+      ),
+    );
+  }
+
+  void _showAddLocation(BuildContext context) {
+    final labelCtr = TextEditingController();
+    final addressCtr = TextEditingController();
+    var emoji = '📍';
+    double? pinX;
+    double? pinY;
+
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (_, setS) {
+          return Container(
+            padding: EdgeInsets.fromLTRB(
+                20, 20, 20, 20 + MediaQuery.of(sheetCtx).viewInsets.bottom),
+            decoration: BoxDecoration(
+              color: Theme.of(sheetCtx).cardTheme.color,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Add New Location',
+                      style: AppTypography.heading
+                          .copyWith(color: Theme.of(sheetCtx).colorScheme.onSurface)),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    children: kLocationEmojiOptions.map((e) {
+                      final active = e == emoji;
+                      return GestureDetector(
+                        onTap: () => setS(() => emoji = e),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: active ? AppColors.primary.withOpacity(0.15) : Colors.transparent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: active ? AppColors.primary : Colors.grey.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(e, style: const TextStyle(fontSize: 16)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: labelCtr,
+                    decoration: InputDecoration(
+                      labelText: 'Label (e.g. Home, Office)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: addressCtr,
+                    decoration: InputDecoration(
+                      labelText: 'Address / Building',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  LocationPinPicker(
+                    onPinSet: (offset) => setS(() {
+                      pinX = offset.dx;
+                      pinY = offset.dy;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final label = labelCtr.text.trim();
+                        final address = addressCtr.text.trim();
+                        if (label.isEmpty || address.isEmpty) return;
+                        final entry = SavedLocation(
+                            emoji: emoji, label: label, address: address, mapX: pinX, mapY: pinY);
+                        await ref.read(savedLocationsProvider.notifier).add(entry);
+                        setState(() => _selectedLocation = entry);
+                        if (sheetCtx.mounted) Navigator.of(sheetCtx, rootNavigator: true).pop();
+                        if (context.mounted) UniToast.show(context, 'Location added and selected');
+                      },
+                      child: const Text('Save & Select'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -83,6 +257,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+
+    final savedLocations = ref.watch(savedLocationsProvider);
+    if (!_locationInitialized && savedLocations.isNotEmpty) {
+      _locationInitialized = true;
+      final defaultDropoff = ref.read(defaultDropoffProvider);
+      _selectedLocation = savedLocations.firstWhere(
+        (l) => l.label == defaultDropoff.name || l.address.contains(defaultDropoff.code),
+        orElse: () => savedLocations.first,
+      );
+    }
 
     final cart = ref.watch(cartProvider);
     final subtotal = ref.watch(cartTotalProvider);
@@ -93,13 +277,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ? const RestaurantStatus()
         : ref.watch(restaurantStatusProvider(cart.first.item.restaurantId)).valueOrNull ??
             const RestaurantStatus();
-    final canPay = balance >= total && restaurantStatus.isOrderable;
+    final needsLocation = _deliveryType == DeliveryType.delivery && _selectedLocation == null;
+    final canPay = balance >= total && restaurantStatus.isOrderable && !needsLocation;
+
+    final allRestaurants = ref.watch(restaurantsProvider).valueOrNull ?? MockDataService.restaurants;
+    final restaurantOffersDelivery = cart.isEmpty ||
+        (allRestaurants.cast<RestaurantModel?>().firstWhere(
+              (r) => r!.id == cart.first.item.restaurantId,
+              orElse: () => null,
+            )?.offersDelivery ??
+            true);
 
     final capacity = ref.watch(deliveryCapacityProvider).valueOrNull;
     // Hard block only when literally nobody is online — soft-warn instead of
     // blocking when drivers are online but stretched thin, so a borderline
     // case doesn't lose the order outright.
-    final deliveryBlocked = capacity != null && !capacity.hasAnyDriver;
+    final deliveryBlocked =
+        !restaurantOffersDelivery || (capacity != null && !capacity.hasAnyDriver);
     final deliveryTight = capacity != null && capacity.hasAnyDriver && !capacity.hasCapacity;
     if (deliveryBlocked && _deliveryType == DeliveryType.delivery) {
       // Auto-switch to Pickup rather than leaving an unselectable option
@@ -107,6 +301,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _deliveryType == DeliveryType.delivery) {
           setState(() => _deliveryType = DeliveryType.pickup);
+        }
+      });
+    } else if (deliveryTight && !_tightWarningAcknowledged && _deliveryType == DeliveryType.delivery) {
+      // Delivery defaults to selected on first load — if capacity is
+      // already tight the moment this screen opens, the tap handler below
+      // never fires to surface the warning, so check once here too.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && deliveryTight && !_tightWarningAcknowledged && _deliveryType == DeliveryType.delivery) {
+          _confirmTightDelivery(context);
         }
       });
     }
@@ -132,11 +335,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 const SizedBox(height: 12),
                 _DeliveryOptionCard(
                   title: 'Delivery',
-                  subtitle: deliveryBlocked
-                      ? 'No drivers available right now'
-                      : deliveryTight
-                          ? 'Drivers are busy — delivery may be delayed'
-                          : 'Student driver will deliver to you',
+                  subtitle: !restaurantOffersDelivery
+                      ? 'This restaurant doesn\'t offer delivery'
+                      : deliveryBlocked
+                          ? 'No drivers available right now'
+                          : deliveryTight
+                              ? 'Drivers are busy — delivery may be delayed'
+                              : 'Student driver will deliver to you',
                   icon: Icons.delivery_dining,
                   fee: kDeliveryFee,
                   isSelected: _deliveryType == DeliveryType.delivery,
@@ -144,7 +349,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   warning: deliveryTight,
                   onTap: deliveryBlocked
                       ? null
-                      : () => setState(() => _deliveryType = DeliveryType.delivery),
+                      : () {
+                          if (deliveryTight &&
+                              !_tightWarningAcknowledged &&
+                              _deliveryType != DeliveryType.delivery) {
+                            _confirmTightDelivery(context); // ignore: discarded_futures
+                          } else {
+                            setState(() => _deliveryType = DeliveryType.delivery);
+                          }
+                        },
                 ),
                 const SizedBox(height: 10),
                 _DeliveryOptionCard(
@@ -155,6 +368,51 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   isSelected: _deliveryType == DeliveryType.pickup,
                   onTap: () => setState(() => _deliveryType = DeliveryType.pickup),
                 ),
+                if (_deliveryType == DeliveryType.delivery) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Deliver To',
+                    style: AppTypography.subheading.copyWith(color: textPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => _showLocationPicker(context, savedLocations),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardTheme.color,
+                        border: Border.all(
+                          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(_selectedLocation?.emoji ?? '📍', style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedLocation?.label ?? 'Select a drop-off location',
+                                  style: AppTypography.subheading.copyWith(color: textPrimary, fontSize: 13),
+                                ),
+                                if (_selectedLocation != null)
+                                  Text(
+                                    _selectedLocation!.address,
+                                    style: AppTypography.caption.copyWith(color: textSecondary),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.keyboard_arrow_down,
+                              color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Text(
                   'Payment Method',
@@ -391,9 +649,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           : Text(
                               !restaurantStatus.isOrderable
                                   ? (restaurantStatus.isOpen ? 'Restaurant Busy' : 'Restaurant Closed')
-                                  : (canPay
-                                      ? 'Pay ${CurrencyFormatter.format(total)}'
-                                      : 'Insufficient Balance'),
+                                  : needsLocation
+                                      ? 'Select a Drop-off Location'
+                                      : (canPay
+                                          ? 'Pay ${CurrencyFormatter.format(total)}'
+                                          : 'Insufficient Balance'),
                             ),
                     ),
                   ),
@@ -448,6 +708,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       setState(() => _isPlacingOrder = false);
       return;
     }
+
+    // Re-check delivery eligibility right before placing too — the UI auto-
+    // switches Delivery to Pickup when drivers go offline, but that's a
+    // post-frame effect racing against this button's tap. Without this
+    // check, a delivery order could be placed for a pickup-only restaurant
+    // or with zero drivers online, and sit unclaimed in 'awaitingDriver'
+    // forever.
+    if (_deliveryType == DeliveryType.delivery) {
+      if (!restaurant.offersDelivery) {
+        UniToast.show(context, '${restaurant.name} doesn\'t offer delivery — switched you to Pickup.');
+        setState(() {
+          _deliveryType = DeliveryType.pickup;
+          _isPlacingOrder = false;
+        });
+        return;
+      }
+      if (kUseFirebase) {
+        final liveCapacity = await FirestoreOrderService.instance.streamDeliveryCapacity().first;
+        if (!liveCapacity.hasAnyDriver) {
+          UniToast.show(context, 'No drivers are available right now — switched you to Pickup.');
+          setState(() {
+            _deliveryType = DeliveryType.pickup;
+            _isPlacingOrder = false;
+          });
+          return;
+        }
+      }
+    }
     final cartSubtotal = ref.read(cartTotalProvider);
     final deliveryFee = _deliveryType == DeliveryType.delivery ? kDeliveryFee : 0.0;
     final subtotal = cartSubtotal;
@@ -469,6 +757,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       deliveryType: _deliveryType,
       createdAt: DateTime.now(),
       estimatedDelivery: estimatedDelivery,
+      deliveryAddress: _deliveryType == DeliveryType.delivery && _selectedLocation != null
+          ? '${_selectedLocation!.label} — ${_selectedLocation!.address}'
+          : null,
       timeline: _deliveryType == DeliveryType.pickup
           ? [
               OrderTimelineStep(
@@ -526,8 +817,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           total: total,
           deliveryType: _deliveryType,
           customerName: MockDataService.currentUser.name,
+          customerPhone: MockDataService.currentUser.phone,
           estimatedDelivery: estimatedDelivery,
           discount: _voucherDiscount,
+          deliveryAddress: order.deliveryAddress,
         );
       } catch (e) {
         // Order is still visible locally; Firestore write failed silently here.
@@ -539,6 +832,102 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!context.mounted) return;
     UniToast.show(context, 'Order placed successfully');
     context.go('/orders');
+  }
+}
+
+class _LocationPickerSheet extends StatelessWidget {
+  final List<SavedLocation> savedLocations;
+  final SavedLocation? selected;
+  final ValueChanged<SavedLocation> onSelect;
+  final VoidCallback onAddNew;
+  final Color mutedColor;
+
+  const _LocationPickerSheet({
+    required this.savedLocations,
+    required this.selected,
+    required this.onSelect,
+    required this.onAddNew,
+    required this.mutedColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textPrimary = Theme.of(context).colorScheme.onSurface;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Deliver To', style: AppTypography.heading.copyWith(color: textPrimary)),
+          const SizedBox(height: 14),
+          if (savedLocations.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('No saved locations yet — add one below',
+                  style: AppTypography.caption.copyWith(color: mutedColor, fontSize: 11)),
+            ),
+          ...savedLocations.map((loc) {
+            final active = loc.label == selected?.label && loc.address == selected?.address;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: GestureDetector(
+                onTap: () => onSelect(loc),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: active ? AppColors.primary : Colors.grey.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(loc.emoji, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(loc.label,
+                                style: AppTypography.subheading.copyWith(
+                                    fontSize: 12,
+                                    color: active ? AppColors.primary : textPrimary)),
+                            Text(loc.address,
+                                style: AppTypography.caption.copyWith(color: mutedColor, fontSize: 10)),
+                          ],
+                        ),
+                      ),
+                      if (active) const Icon(Icons.check_circle, size: 18, color: AppColors.primary),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onAddNew,
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: const Text('Add New Location'),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

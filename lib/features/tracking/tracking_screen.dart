@@ -13,6 +13,7 @@ import '../../core/widgets/uni_toast.dart';
 import '../../models/order_model.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../orders/providers/orders_provider.dart';
 
 class TrackingScreen extends ConsumerStatefulWidget {
   const TrackingScreen({super.key});
@@ -64,7 +65,8 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
     final textPrimary = Theme.of(context).colorScheme.onSurface;
     final textSecondary = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
-    if (MockDataService.orders.isEmpty) {
+    final allOrders = ref.watch(ordersProvider);
+    if (allOrders.isEmpty) {
       return Scaffold(
         body: Center(
           child: Text(
@@ -75,13 +77,11 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
       );
     }
 
-    final order = MockDataService.orders.cast<OrderModel?>().firstWhere(
+    final order = allOrders.cast<OrderModel?>().firstWhere(
           (o) => o!.status == OrderStatus.delivering,
-          orElse: () => MockDataService.orders
-              .cast<OrderModel?>()
-              .firstWhere((o) => o!.isActive, orElse: () => null),
+          orElse: () => allOrders.cast<OrderModel?>().firstWhere((o) => o!.isActive, orElse: () => null),
         ) ??
-        MockDataService.orders.first;
+        allOrders.first;
 
     final isDelivering = order.status == OrderStatus.delivering;
 
@@ -138,6 +138,9 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
               order: order,
               textPrimary: textPrimary,
               textSecondary: textSecondary,
+              onPickupMyself: () => ref.read(ordersProvider.notifier).switchToPickup(order.id),
+              onCancel: () => ref.read(ordersProvider.notifier).cancelOrder(order.id,
+                  reason: 'No driver available'),
             ),
           ),
         ],
@@ -280,11 +283,15 @@ class _TrackingSheet extends StatelessWidget {
   final OrderModel order;
   final Color textPrimary;
   final Color textSecondary;
+  final VoidCallback onPickupMyself;
+  final VoidCallback onCancel;
 
   const _TrackingSheet({
     required this.order,
     required this.textPrimary,
     required this.textSecondary,
+    required this.onPickupMyself,
+    required this.onCancel,
   });
 
   @override
@@ -323,6 +330,14 @@ class _TrackingSheet extends StatelessWidget {
                 ),
               ),
             ),
+            if (order.noDriversAvailable) ...[
+              _NoDriversBanner(
+                order: order,
+                onPickupMyself: onPickupMyself,
+                onCancel: onCancel,
+              ),
+              const SizedBox(height: 10),
+            ],
             _EtaCard(order: order),
             if (showDriverCard) ...[
               const SizedBox(height: 10),
@@ -332,6 +347,110 @@ class _TrackingSheet extends StatelessWidget {
             _Timeline(order: order, textPrimary: textPrimary, textMuted: textMuted),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NoDriversBanner extends StatelessWidget {
+  final OrderModel order;
+  final VoidCallback onPickupMyself;
+  final VoidCallback onCancel;
+
+  const _NoDriversBanner({
+    required this.order,
+    required this.onPickupMyself,
+    required this.onCancel,
+  });
+
+  Future<void> _confirmPickup(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick up yourself?'),
+        content: Text(
+          'You\'ll collect the order from ${order.restaurantName} in person. '
+          'The delivery fee will be refunded from this order\'s total.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Switch to Pickup'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onPickupMyself();
+  }
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel this order?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep Order')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel Order'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onCancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No driver is available for this order right now.',
+                  style: AppTypography.label.copyWith(
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _confirmCancel(context),
+                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                  child: const Text('Cancel Order'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _confirmPickup(context),
+                  child: const Text('Pick Up Myself'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

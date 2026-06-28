@@ -9,7 +9,9 @@ import '../../core/widgets/uni_toast.dart';
 import '../../models/cart_item_model.dart';
 import '../../services/mock_data_service.dart';
 import '../../utils/currency_formatter.dart';
+import '../cart/cart_restaurant_guard.dart';
 import '../cart/providers/cart_provider.dart';
+import '../profile/providers/preferences_provider.dart';
 import 'providers/menu_availability_provider.dart';
 import 'providers/restaurant_status_provider.dart';
 import 'providers/restaurants_provider.dart';
@@ -25,7 +27,6 @@ class RestaurantDetailScreen extends ConsumerStatefulWidget {
 
 class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen> {
   String _selectedCategory = 'All';
-  bool _isFavorite = false;
 
   @override
   void initState() {
@@ -80,17 +81,21 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: _CircleIconButton(
-                  icon: _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  iconColor: _isFavorite ? AppColors.danger : Colors.white,
-                  onTap: () {
-                    setState(() => _isFavorite = !_isFavorite);
-                    UniToast.show(
-                      context,
-                      _isFavorite ? 'Added to favourites' : 'Removed from favourites',
-                    );
-                  },
-                ),
+                child: Builder(builder: (context) {
+                  final isFavorite =
+                      ref.watch(favoriteRestaurantIdsProvider).contains(restaurant.id);
+                  return _CircleIconButton(
+                    icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+                    iconColor: isFavorite ? AppColors.danger : Colors.white,
+                    onTap: () {
+                      ref.read(favoriteRestaurantIdsProvider.notifier).toggle(restaurant.id);
+                      UniToast.show(
+                        context,
+                        !isFavorite ? 'Added to favourites' : 'Removed from favourites',
+                      );
+                    },
+                  );
+                }),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -373,9 +378,16 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                         quantity: cartItem?.quantity,
                         isAvailable: canAdd,
                         onAdd: canAdd
-                            ? () {
-                                ref.read(cartProvider.notifier).addItem(item);
-                                UniToast.show(context, 'Added ${item.name}');
+                            ? () async {
+                                final added = await addToCartWithRestaurantGuard(
+                                  context,
+                                  ref,
+                                  item,
+                                  newRestaurantName: restaurant.name,
+                                );
+                                if (added && context.mounted) {
+                                  UniToast.show(context, 'Added ${item.name}');
+                                }
                               }
                             : null,
                         onRemove: cartItem != null

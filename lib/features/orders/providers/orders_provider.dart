@@ -83,7 +83,19 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
 
     for (final remote0 in remote) {
       seen.add(remote0.id);
-      if (_localCancelled.contains(remote0.id)) continue; // never resurrect
+      if (_localCancelled.contains(remote0.id)) {
+        // Keep our own cancelled copy (with its real cancelReason) instead of
+        // whatever Firestore's snapshot says — previously this just skipped
+        // the order entirely once Firestore's write echoed back, which
+        // dropped it out of `merged` altogether (it never landed in the
+        // fallback "keep local orders" loop below either, since `seen`
+        // already contains its id by this point) — the order would
+        // disappear from the Cancelled tab moments after cancelling instead
+        // of staying there.
+        final localCancelled = localById[remote0.id];
+        if (localCancelled != null) merged.add(localCancelled);
+        continue; // never resurrect to a non-cancelled status from remote
+      }
 
       final local = localById[remote0.id];
       if (local != null) {
@@ -107,6 +119,17 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
               );
         } else if (winner.status != local.status) {
           _pushStatusNotification(winner);
+        }
+        if (winner.noDriversAvailable && !local.noDriversAvailable) {
+          _ref.read(notificationsProvider.notifier).addNotification(
+                NotificationItem(
+                  emoji: '🚫',
+                  title: 'No Driver Available',
+                  subtitle:
+                      '${winner.restaurantName} has no driver for your order. Pick it up yourself, or cancel.',
+                  route: '/tracking',
+                ),
+              );
         }
       } else {
         // Unknown order from Firestore — only import if recent.
@@ -228,11 +251,47 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
     }
   }
 
-  void rateOrder(String orderId, int rating) {
+  /// Customer's own resolution when noDriversAvailable fires — switches the
+  /// order to pickup instead of waiting indefinitely for a driver that may
+  /// never come. Status/driverId/userId stay untouched; only orderType,
+  /// deliveryFee, and total move, matching the Firestore rule for this
+  /// transition exactly.
+  void switchToPickup(String orderId) {
+    final order = state.firstWhere((o) => o.id == orderId);
+    final newTotal = order.total - order.deliveryFee;
+    updateOrder(
+      order.copyWith(
+        deliveryType: DeliveryType.pickup,
+        deliveryFee: 0,
+        total: newTotal,
+        noDriversAvailable: false,
+      ),
+    );
+    // Shrink the hold to match — previously left at the original
+    // delivery-inclusive amount until capture/release, understating
+    // available balance by the delivery fee for as long as it sat pending.
+    _ref.read(walletBalanceProvider.notifier).adjustHold(orderId, newTotal);
+    if (kUseFirebase) {
+      FirestoreOrderService.instance
+          .switchOrderToPickup(orderId, newTotal: newTotal)
+          .catchError((e) => debugPrint('[Firestore] switchToPickup failed: $e'));
+    }
+  }
+
+  void rateOrder(String orderId, int rating, {int? driverRating}) {
+    final order = state.firstWhere(
+      (o) => o.id == orderId,
+      orElse: () => throw StateError('rateOrder: order $orderId not found'),
+    );
     state = [
-      for (final order in state)
-        if (order.id == orderId) order.copyWith(rating: rating) else order,
+      for (final o in state)
+        if (o.id == orderId) o.copyWith(rating: rating) else o,
     ];
+    if (kUseFirebase) {
+      FirestoreOrderService.instance
+          .submitRating(order: order, vendorRating: rating, driverRating: driverRating)
+          .catchError((e) => debugPrint('[Firestore] submitRating failed: $e'));
+    }
   }
 
   @override

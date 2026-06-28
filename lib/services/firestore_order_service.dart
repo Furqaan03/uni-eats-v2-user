@@ -149,8 +149,10 @@ class FirestoreOrderService {
     required double total,
     required DeliveryType deliveryType,
     String customerName = 'Customer',
+    String? customerPhone,
     DateTime? estimatedDelivery,
     double discount = 0,
+    String? deliveryAddress,
   }) async {
     await _col.doc(orderId).set({
       'id': orderId,
@@ -160,6 +162,7 @@ class FirestoreOrderService {
       'driverId': null,
       'driverName': null,
       'customerName': customerName,
+      'customerPhone': customerPhone,
       'restaurantName': restaurantName,
       'items': items
           .map((ci) => {
@@ -178,6 +181,7 @@ class FirestoreOrderService {
       'status': 'placed',
       'paymentStatus': 'held',
       'orderType': deliveryType == DeliveryType.pickup ? 'pickup' : 'delivery',
+      'deliveryAddress': deliveryAddress,
       'createdAt': FieldValue.serverTimestamp(),
       'estimatedDelivery': estimatedDelivery != null
           ? Timestamp.fromDate(estimatedDelivery)
@@ -193,9 +197,42 @@ class FirestoreOrderService {
     });
   }
 
+  /// Customer's own resolution for a stuck "no drivers available" delivery
+  /// order — switches it to pickup (they'll collect it themselves) and
+  /// clears the flag. Scoped to exactly orderType/deliveryFee/total/
+  /// noDriversAvailable per the Firestore rule for this transition; status,
+  /// driverId, and userId are deliberately untouched.
+  Future<void> switchOrderToPickup(String orderId, {required double newTotal}) async {
+    await _col.doc(orderId).update({
+      'orderType': 'pickup',
+      'deliveryFee': 0,
+      'total': newTotal,
+      'noDriversAvailable': false,
+    });
+  }
+
   /// Marks the escrow state of an order's wallet hold — 'held', 'captured', or 'released'.
   Future<void> updatePaymentStatus(String orderId, String paymentStatus) async {
     await _col.doc(orderId).update({'paymentStatus': paymentStatus});
+  }
+
+  /// Writes the customer's rating for a delivered order to `ratings/{orderId}`.
+  /// Doc ID == order ID, enforcing one rating per order per the Firestore rule,
+  /// which separately verifies vendorId/driverId/userId against the real order.
+  Future<void> submitRating({
+    required OrderModel order,
+    required int vendorRating,
+    int? driverRating,
+  }) async {
+    await FirebaseFirestore.instance.collection('ratings').doc(order.id).set({
+      'orderId': order.id,
+      'userId': order.userId,
+      'vendorId': order.restaurantId,
+      'driverId': order.driverId,
+      'vendorRating': vendorRating,
+      if (driverRating != null) 'driverRating': driverRating,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Fetch the persisted wallet balance for [userId], if any has ever been written.
@@ -460,6 +497,8 @@ class FirestoreOrderService {
         (p) => p.name == (d['paymentStatus'] as String?),
         orElse: () => PaymentStatus.captured,
       ),
+      noDriversAvailable: d['noDriversAvailable'] as bool? ?? false,
+      deliveryAddress: d['deliveryAddress'] as String?,
     );
   }
 
