@@ -73,6 +73,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       setState(() { _isApplyingVoucher = false; _voucherError = 'Invalid voucher code.'; _voucherDiscount = 0; _appliedVoucher = null; });
       return;
     }
+    final cart = ref.read(cartProvider);
+    final restaurantId = cart.isNotEmpty ? cart.first.item.restaurantId : null;
+    if (voucher['restaurantId'] != restaurantId) {
+      setState(() {
+        _isApplyingVoucher = false;
+        _voucherError = 'This voucher isn\'t valid at this restaurant.';
+        _voucherDiscount = 0;
+        _appliedVoucher = null;
+      });
+      return;
+    }
     final type = voucher['type'] as String;
     final value = (voucher['value'] as num).toDouble();
     final min = (voucher['min'] as num?)?.toDouble() ?? 0;

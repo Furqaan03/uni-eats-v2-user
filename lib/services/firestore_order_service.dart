@@ -316,10 +316,15 @@ class FirestoreOrderService {
   }
 
   /// Push a status update for an order (e.g. user-initiated cancellation).
+  /// `cancelledBy: 'customer'` on a cancellation lets the vendor app's order
+  /// history tell "the customer cancelled this" apart from "I rejected
+  /// this" — both land as Firestore status 'cancelled', so without this tag
+  /// there'd be no way to distinguish them after the fact.
   Future<void> updateOrderStatus(String orderId, String status, {String? cancelReason}) async {
     await _col.doc(orderId).update({
       'status': status,
       if (cancelReason != null) 'cancelReason': cancelReason,
+      if (status == 'cancelled') 'cancelledBy': 'customer',
     });
   }
 
