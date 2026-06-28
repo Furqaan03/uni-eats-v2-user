@@ -190,6 +190,19 @@ class _RestaurantDetailScreenState extends ConsumerState<RestaurantDetailScreen>
                     '${restaurant.category} · Building ${restaurant.building}',
                     style: AppTypography.caption.copyWith(color: textSecondary),
                   ),
+                  if (status.todaysHoursLabel != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 11, color: textSecondary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Today: ${status.todaysHoursLabel}',
+                          style: AppTypography.caption.copyWith(color: textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
                   Container(
                     margin: const EdgeInsets.only(top: 10),
                     padding: const EdgeInsets.only(top: 10),
