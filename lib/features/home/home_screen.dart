@@ -129,6 +129,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _scrollToAllRestaurants();
   }
 
+  // Tapping a category chip only used to filter the "All Restaurants" list
+  // further down the same screen — easy to miss if the user doesn't scroll
+  // down on their own. Jumps straight to the (now-filtered) results instead,
+  // same as tapping "Top Rated" already did.
+  void _selectCategory(String category) {
+    setState(() => _selectedCategory = category);
+    if (category != 'All') _scrollToAllRestaurants();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -236,7 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SizedBox(height: 10),
                 CategoryChips(
                   selected: _selectedCategory,
-                  onSelected: (c) => setState(() => _selectedCategory = c),
+                  onSelected: _selectCategory,
                 ),
                 const SizedBox(height: 12),
                 if (_searchQuery.isEmpty) ...[
