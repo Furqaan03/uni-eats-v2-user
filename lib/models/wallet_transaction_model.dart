@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum TransactionType { topUp, payment, refund, transferOut }
+enum TransactionType { topUp, payment, refund, transferOut, transferIn }
 
 @immutable
 class WalletTransactionModel {
@@ -42,7 +42,8 @@ class WalletTransactionModel {
     );
   }
 
-  bool get isCredit => type == TransactionType.topUp || type == TransactionType.refund;
+  bool get isCredit =>
+      type == TransactionType.topUp || type == TransactionType.refund || type == TransactionType.transferIn;
 
   Map<String, dynamic> toMap() => {
         'id': id,

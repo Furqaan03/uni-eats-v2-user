@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/cart_item_model.dart';
 import '../models/menu_item_model.dart';
@@ -45,6 +46,21 @@ class FirestoreOrderService {
 
   CollectionReference<Map<String, dynamic>> get _usersCol =>
       FirebaseFirestore.instance.collection('users');
+
+  // Maps a lowercased email or university ID to the uid that owns it, so a
+  // wallet transfer can resolve a recipient without querying `users`
+  // directly (rules restrict that collection's read to admin/self — see
+  // firestore.rules). Holds only a uid pointer, no PII.
+  CollectionReference<Map<String, dynamic>> get _directoryCol =>
+      FirebaseFirestore.instance.collection('userDirectory');
+
+  CollectionReference<Map<String, dynamic>> get _vouchersCol =>
+      FirebaseFirestore.instance.collection('vouchers');
+
+  CollectionReference<Map<String, dynamic>> get _transfersCol =>
+      FirebaseFirestore.instance.collection('walletTransfers');
+
+  static String normalizeDirectoryKey(String raw) => raw.trim().toLowerCase();
 
   /// Live delivery-capacity signal — combines online-driver count with
   /// in-flight delivery order count so checkout can gate (or soft-warn on)
@@ -120,6 +136,112 @@ class FirestoreOrderService {
       'avatarUrl': user.avatarUrl,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    await _writeDirectoryEntries(user);
+  }
+
+  /// Registers this user's email/universityId -> uid pointers so wallet
+  /// transfers can resolve a recipient by either. Best-effort: a failure
+  /// here shouldn't block signup/profile-save, since the transfer flow
+  /// re-checks lookup results before moving any money.
+  Future<void> _writeDirectoryEntries(UserModel user) async {
+    final batch = FirebaseFirestore.instance.batch();
+    if (user.email.isNotEmpty) {
+      batch.set(
+        _directoryCol.doc(normalizeDirectoryKey(user.email)),
+        {'uid': user.id},
+      );
+    }
+    if (user.universityId.isNotEmpty) {
+      batch.set(
+        _directoryCol.doc(normalizeDirectoryKey(user.universityId)),
+        {'uid': user.id},
+      );
+    }
+    try {
+      await batch.commit();
+    } catch (e) {
+      debugPrint('[Firestore] writeDirectoryEntries failed: $e');
+    }
+  }
+
+  /// Resolves a transfer recipient's uid from the email/student-ID they
+  /// typed, via the userDirectory pointer collection. Returns null if no
+  /// such account exists.
+  Future<String?> lookupUserIdByDirectoryKey(String key) async {
+    final snap = await _directoryCol.doc(normalizeDirectoryKey(key)).get();
+    return snap.data()?['uid'] as String?;
+  }
+
+  /// Fetches a voucher's real terms from Firestore so checkout can validate
+  /// a code server-side (the rules layer cross-checks the resulting discount
+  /// against this same doc — see firestore.rules `orders` create rule).
+  /// Returns null if the code doesn't exist or has been deactivated.
+  Future<Map<String, dynamic>?> fetchVoucher(String code) async {
+    final snap = await _vouchersCol.doc(code.trim().toUpperCase()).get();
+    final data = snap.data();
+    if (data == null || data['active'] != true) return null;
+    return data;
+  }
+
+  /// Sender side of a wallet-to-wallet transfer: debits the sender's own
+  /// wallet and opens a pending `walletTransfers` doc in one atomic batch.
+  /// The recipient's own client claims it (see [claimIncomingTransfer]) —
+  /// this app never writes another user's wallet doc directly, since rules
+  /// only allow a user to write their own wallets/{uid} doc.
+  Future<void> createOutgoingTransfer({
+    required String transferId,
+    required String fromUserId,
+    required String toUserId,
+    required double amount,
+    required double newSenderBalance,
+    required WalletTransactionModel senderTx,
+  }) async {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(
+      FirebaseFirestore.instance.collection('wallets').doc(fromUserId),
+      {'balance': newSenderBalance},
+      SetOptions(merge: true),
+    );
+    batch.set(_walletTxCol(fromUserId).doc(senderTx.id), senderTx.toMap());
+    batch.set(_transfersCol.doc(transferId), {
+      'fromUserId': fromUserId,
+      'toUserId': toUserId,
+      'amount': amount,
+      'status': 'pending',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+  }
+
+  /// Live stream of transfers addressed to [userId] still awaiting claim.
+  Stream<List<Map<String, dynamic>>> streamIncomingPendingTransfers(String userId) {
+    return _transfersCol
+        .where('toUserId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => {...d.data(), 'id': d.id}).toList());
+  }
+
+  /// Recipient side of a transfer: credits their own wallet and marks the
+  /// transfer doc completed, atomically.
+  Future<void> claimIncomingTransfer({
+    required String transferId,
+    required String toUserId,
+    required double newRecipientBalance,
+    required WalletTransactionModel recipientTx,
+  }) async {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.set(
+      FirebaseFirestore.instance.collection('wallets').doc(toUserId),
+      {'balance': newRecipientBalance},
+      SetOptions(merge: true),
+    );
+    batch.set(_walletTxCol(toUserId).doc(recipientTx.id), recipientTx.toMap());
+    batch.update(_transfersCol.doc(transferId), {
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
   }
 
   /// Persist profile edits (name, phone, dietary preferences, etc.).
@@ -152,6 +274,7 @@ class FirestoreOrderService {
     String? customerPhone,
     DateTime? estimatedDelivery,
     double discount = 0,
+    String? voucherCode,
     String? deliveryAddress,
     DateTime? scheduledFor,
   }) async {
@@ -177,6 +300,7 @@ class FirestoreOrderService {
           .toList(),
       'subtotal': subtotal,
       'discount': discount,
+      if (voucherCode != null) 'voucherCode': voucherCode,
       'deliveryFee': deliveryFee,
       'total': total,
       'status': 'placed',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -44,6 +46,8 @@ class WalletNotifier extends StateNotifier<double> {
   String? _lastUserId;
   final Map<String, double> _holds = {};
   final Set<String> _resolvedOrders = {}; // captured or released — never act twice
+  StreamSubscription<List<Map<String, dynamic>>>? _incomingTransfersSub;
+  final Set<String> _claimingTransferIds = {}; // in-flight claims — never double-claim
   // Owned here instead of a global mutable list on MockDataService — that
   // static was never cleared/scoped per user beyond what this class already
   // does to it, so keeping the real list as this notifier's own state is
@@ -63,7 +67,61 @@ class WalletNotifier extends StateNotifier<double> {
     _syncHeldTotal();
     state = 0;
     _transactions.clear();
-    if (_userId.isNotEmpty) _loadPersisted();
+    _incomingTransfersSub?.cancel();
+    _incomingTransfersSub = null;
+    _claimingTransferIds.clear();
+    if (_userId.isNotEmpty) {
+      _loadPersisted();
+      _listenForIncomingTransfers();
+    }
+  }
+
+  /// Watches for wallet transfers sent *to* this user and credits them as
+  /// soon as they arrive — the sender's client only ever debits itself and
+  /// opens a pending walletTransfers doc (rules forbid writing another
+  /// user's wallet directly), so the recipient's own client has to be the
+  /// one to actually claim the funds into their wallet.
+  void _listenForIncomingTransfers() {
+    if (!kUseFirebase) return;
+    final userId = _userId;
+    _incomingTransfersSub = FirestoreOrderService.instance
+        .streamIncomingPendingTransfers(userId)
+        .listen((pending) {
+      for (final transfer in pending) {
+        _claimTransfer(userId, transfer);
+      }
+    }, onError: (Object e) => debugPrint('[Firestore] streamIncomingTransfers failed: $e'));
+  }
+
+  Future<void> _claimTransfer(String userId, Map<String, dynamic> transfer) async {
+    final transferId = transfer['id'] as String;
+    if (!_claimingTransferIds.add(transferId)) return; // already in flight
+    final amount = (transfer['amount'] as num).toDouble();
+    final fromUserId = transfer['fromUserId'] as String?;
+    try {
+      final newBalance = state + amount;
+      final tx = WalletTransactionModel(
+        id: const Uuid().v4(),
+        userId: userId,
+        amount: amount,
+        type: TransactionType.transferIn,
+        reference: 'TRF-$transferId',
+        description: fromUserId != null ? 'Transfer received' : 'Transfer received',
+        timestamp: DateTime.now(),
+      );
+      await FirestoreOrderService.instance.claimIncomingTransfer(
+        transferId: transferId,
+        toUserId: userId,
+        newRecipientBalance: newBalance,
+        recipientTx: tx,
+      );
+      if (_userId != userId) return; // user switched mid-claim
+      state = newBalance;
+      _transactions.insert(0, tx);
+    } catch (e) {
+      debugPrint('[Firestore] claimIncomingTransfer failed: $e');
+      _claimingTransferIds.remove(transferId); // allow retry on next snapshot
+    }
   }
 
   Future<void> _loadPersisted() async {
@@ -183,23 +241,60 @@ class WalletNotifier extends StateNotifier<double> {
     if (_holds.remove(orderId) != null) _syncHeldTotal();
   }
 
-  /// Sends [amount] out of the user's wallet to [recipient] (email or student ID).
-  /// Returns null on success, an error message on failure.
-  String? transfer(double amount, {required String recipient}) {
+  /// Sends [amount] out of the user's wallet to [recipient] (email or
+  /// student ID). Returns null on success, an error message on failure.
+  ///
+  /// Resolves [recipient] to a real account via userDirectory first — the
+  /// old version only checked the *shape* of the input (contains '@' or
+  /// length >= 6) and debited the sender with no recipient credit at all,
+  /// so every transfer just destroyed money. Funds now move via a pending
+  /// walletTransfers doc the recipient's own client claims (see
+  /// _listenForIncomingTransfers) — this client can't write the recipient's
+  /// wallet directly (rules restrict wallets/{uid} writes to its own owner).
+  Future<String?> transfer(double amount, {required String recipient}) async {
     if (amount <= 0) return 'Enter a valid amount.';
     if (!canPay(amount)) return 'Insufficient wallet balance.';
-    _applyBalanceChange(
-      state - amount,
-      WalletTransactionModel(
-        id: const Uuid().v4(),
-        userId: _userId,
-        amount: amount,
-        type: TransactionType.transferOut,
-        reference: 'TRF-${const Uuid().v4().substring(0, 8).toUpperCase()}',
-        description: 'Transfer to $recipient',
-        timestamp: DateTime.now(),
-      ),
+
+    if (!kUseFirebase) return 'Transfers require an active connection.';
+
+    String? toUserId;
+    try {
+      toUserId = await FirestoreOrderService.instance.lookupUserIdByDirectoryKey(recipient);
+    } catch (e) {
+      debugPrint('[Firestore] lookupUserIdByDirectoryKey failed: $e');
+      return 'Could not verify that recipient. Please try again.';
+    }
+    if (toUserId == null) return 'No account found for "$recipient".';
+    if (toUserId == _userId) return 'You can\'t transfer to yourself.';
+
+    final newBalance = state - amount;
+    final transferId = const Uuid().v4();
+    final tx = WalletTransactionModel(
+      id: const Uuid().v4(),
+      userId: _userId,
+      amount: amount,
+      type: TransactionType.transferOut,
+      reference: 'TRF-$transferId',
+      description: 'Transfer to $recipient',
+      timestamp: DateTime.now(),
     );
+
+    try {
+      await FirestoreOrderService.instance.createOutgoingTransfer(
+        transferId: transferId,
+        fromUserId: _userId,
+        toUserId: toUserId,
+        amount: amount,
+        newSenderBalance: newBalance,
+        senderTx: tx,
+      );
+    } catch (e) {
+      debugPrint('[Firestore] createOutgoingTransfer failed: $e');
+      return 'Transfer failed. Please try again.';
+    }
+
+    state = newBalance;
+    _transactions.insert(0, tx);
     return null;
   }
 
@@ -216,5 +311,11 @@ class WalletNotifier extends StateNotifier<double> {
         timestamp: DateTime.now(),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _incomingTransfersSub?.cancel();
+    super.dispose();
   }
 }

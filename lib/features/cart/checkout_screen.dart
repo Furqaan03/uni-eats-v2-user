@@ -50,6 +50,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   double _voucherDiscount = 0;
   String? _voucherError;
   bool _isPlacingOrder = false;
+  bool _isApplyingVoucher = false;
   SavedLocation? _selectedLocation;
   bool _locationInitialized = false;
   // Only nag once per visit to this screen — re-tapping Delivery after
@@ -57,29 +58,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   // show the same "drivers are busy" prompt again.
   bool _tightWarningAcknowledged = false;
 
-  // Mock vouchers — in production these would come from Firestore per restaurant
-  static const _mockVouchers = <String, (String type, double value, double min)>{
-    'WELCOME10': ('percent', 10, 0),
-    'SAVE5':     ('flat',    5,  20),
-    'UDST15':    ('percent', 15, 30),
-  };
-
-  void _applyVoucher(double subtotal) {
+  // Vouchers live in Firestore (vouchers/{code}) so the rules layer can
+  // re-derive and check the resulting discount at order-creation time — a
+  // client-only voucher table (the old _mockVouchers map) let anyone send
+  // any discount value with no real voucher behind it. See firestore.rules
+  // `isValidVoucherDiscount`.
+  Future<void> _applyVoucher(double subtotal) async {
     final code = _voucherCtrl.text.trim().toUpperCase();
-    final entry = _mockVouchers[code];
-    if (entry == null) {
-      setState(() { _voucherError = 'Invalid voucher code.'; _voucherDiscount = 0; _appliedVoucher = null; });
+    if (code.isEmpty) return;
+    setState(() { _isApplyingVoucher = true; _voucherError = null; });
+    final voucher = await FirestoreOrderService.instance.fetchVoucher(code);
+    if (!mounted) return;
+    if (voucher == null) {
+      setState(() { _isApplyingVoucher = false; _voucherError = 'Invalid voucher code.'; _voucherDiscount = 0; _appliedVoucher = null; });
       return;
     }
-    final (type, value, min) = entry;
+    final type = voucher['type'] as String;
+    final value = (voucher['value'] as num).toDouble();
+    final min = (voucher['min'] as num?)?.toDouble() ?? 0;
     if (subtotal < min) {
-      setState(() { _voucherError = 'Min order QAR ${min.toStringAsFixed(0)} required.'; _voucherDiscount = 0; _appliedVoucher = null; });
+      setState(() { _isApplyingVoucher = false; _voucherError = 'Min order QAR ${min.toStringAsFixed(0)} required.'; _voucherDiscount = 0; _appliedVoucher = null; });
       return;
     }
     final discount = type == 'percent'
         ? (subtotal * value / 100).clamp(0.0, subtotal)
         : value.clamp(0.0, subtotal);
-    setState(() { _appliedVoucher = code; _voucherDiscount = discount; _voucherError = null; });
+    setState(() {
+      _isApplyingVoucher = false;
+      _appliedVoucher = code;
+      _voucherDiscount = discount;
+      _voucherError = null;
+    });
   }
 
   void _removeVoucher() {
@@ -654,7 +663,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
-                        onPressed: () => _applyVoucher(subtotal),
+                        onPressed: _isApplyingVoucher ? null : () => _applyVoucher(subtotal), // ignore: discarded_futures
                         style: OutlinedButton.styleFrom(
                           side:
                               const BorderSide(color: AppColors.primary),
@@ -663,10 +672,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: Text('Apply',
-                            style: AppTypography.body.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700)),
+                        child: _isApplyingVoucher
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text('Apply',
+                                style: AppTypography.body.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -928,6 +943,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           customerPhone: MockDataService.currentUser.phone,
           estimatedDelivery: estimatedDelivery,
           discount: _voucherDiscount,
+          voucherCode: _appliedVoucher,
           deliveryAddress: order.deliveryAddress,
           scheduledFor: _scheduledFor,
         );
