@@ -100,7 +100,11 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
       final local = localById[remote0.id];
       if (local != null) {
         // Keep whichever status is more advanced (higher enum index = later stage).
-        final winner = local.status.index >= remote0.status.index ? local : remote0;
+        // On a tie, prefer remote: equal status is the common case for flags
+        // like noDriversAvailable/customerUnreachable/runningLate, which never
+        // move `status` themselves — picking local on ties silently dropped
+        // every one of those flag updates from the live Firestore snapshot.
+        final winner = local.status.index > remote0.status.index ? local : remote0;
         merged.add(winner);
         _resolveEscrow(previousStatus: local.status, order: winner);
         // Reaching here with a fresh cancellation means the VENDOR rejected it —
@@ -127,6 +131,26 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
                   title: 'No Driver Available',
                   subtitle:
                       '${winner.restaurantName} has no driver for your order. Pick it up yourself, or cancel.',
+                  route: '/tracking',
+                ),
+              );
+        }
+        if (winner.customerUnreachable && !local.customerUnreachable) {
+          _ref.read(notificationsProvider.notifier).addNotification(
+                NotificationItem(
+                  emoji: '🚪',
+                  title: 'Your driver is outside!',
+                  subtitle: 'Come to the door or your order may be returned.',
+                  route: '/tracking',
+                ),
+              );
+        }
+        if (winner.runningLate && !local.runningLate) {
+          _ref.read(notificationsProvider.notifier).addNotification(
+                NotificationItem(
+                  emoji: '⏰',
+                  title: 'Running a little late',
+                  subtitle: 'Your ${winner.restaurantName} order is taking longer than expected. Sorry for the wait!',
                   route: '/tracking',
                 ),
               );
@@ -275,6 +299,19 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
       FirestoreOrderService.instance
           .switchOrderToPickup(orderId, newTotal: newTotal)
           .catchError((e) => debugPrint('[Firestore] switchToPickup failed: $e'));
+    }
+  }
+
+  /// Customer's "I'm on my way" response to a `customerUnreachable` alert —
+  /// clears the flag both locally and in Firestore so the banner/countdown
+  /// disappears immediately instead of waiting for the next snapshot.
+  void clearCustomerUnreachable(String orderId) {
+    final order = state.firstWhere((o) => o.id == orderId);
+    updateOrder(order.copyWith(customerUnreachable: false));
+    if (kUseFirebase) {
+      FirestoreOrderService.instance
+          .clearCustomerUnreachable(orderId)
+          .catchError((e) => debugPrint('[Firestore] clearCustomerUnreachable failed: $e'));
     }
   }
 

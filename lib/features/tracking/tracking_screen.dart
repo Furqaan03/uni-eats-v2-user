@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -158,6 +159,9 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
               onPickupMyself: () => ref.read(ordersProvider.notifier).switchToPickup(order.id),
               onCancel: () => ref.read(ordersProvider.notifier).cancelOrder(order.id,
                   reason: 'No driver available'),
+              onImOnMyWay: () => ref.read(ordersProvider.notifier).clearCustomerUnreachable(order.id),
+              onUnreachableTimeout: () => ref.read(ordersProvider.notifier).cancelOrder(order.id,
+                  reason: 'Customer unreachable at drop-off'),
             ),
           ),
         ],
@@ -302,6 +306,8 @@ class _TrackingSheet extends StatelessWidget {
   final Color textSecondary;
   final VoidCallback onPickupMyself;
   final VoidCallback onCancel;
+  final VoidCallback onImOnMyWay;
+  final VoidCallback onUnreachableTimeout;
 
   const _TrackingSheet({
     required this.order,
@@ -309,6 +315,8 @@ class _TrackingSheet extends StatelessWidget {
     required this.textSecondary,
     required this.onPickupMyself,
     required this.onCancel,
+    required this.onImOnMyWay,
+    required this.onUnreachableTimeout,
   });
 
   @override
@@ -347,6 +355,18 @@ class _TrackingSheet extends StatelessWidget {
                 ),
               ),
             ),
+            if (order.customerUnreachable) ...[
+              _CustomerUnreachableBanner(
+                order: order,
+                onImOnMyWay: onImOnMyWay,
+                onTimeout: onUnreachableTimeout,
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (order.runningLate && order.status != OrderStatus.delivered) ...[
+              _RunningLateBanner(order: order),
+              const SizedBox(height: 10),
+            ],
             if (order.noDriversAvailable) ...[
               _NoDriversBanner(
                 order: order,
@@ -466,6 +486,190 @@ class _NoDriversBanner extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// S8/S9 — driver is at the door and getting no response. Shows a
+/// countdown from `customerUnreachableAt`; once it expires the customer is
+/// asked whether to keep waiting or cancel, instead of the order silently
+/// sitting at `arrivedAtCustomer` forever.
+class _CustomerUnreachableBanner extends StatefulWidget {
+  final OrderModel order;
+  final VoidCallback onImOnMyWay;
+  final VoidCallback onTimeout;
+
+  const _CustomerUnreachableBanner({
+    required this.order,
+    required this.onImOnMyWay,
+    required this.onTimeout,
+  });
+
+  @override
+  State<_CustomerUnreachableBanner> createState() => _CustomerUnreachableBannerState();
+}
+
+class _CustomerUnreachableBannerState extends State<_CustomerUnreachableBanner> {
+  static const _countdown = Duration(minutes: 12);
+  Timer? _ticker;
+  Duration _remaining = Duration.zero;
+  bool _expiredPromptShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _recompute();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _recompute());
+  }
+
+  @override
+  void didUpdateWidget(_CustomerUnreachableBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order.customerUnreachableAt != widget.order.customerUnreachableAt) {
+      _expiredPromptShown = false;
+      _recompute();
+    }
+  }
+
+  void _recompute() {
+    final since = widget.order.customerUnreachableAt;
+    final elapsed = since != null ? DateTime.now().difference(since) : Duration.zero;
+    final remaining = _countdown - elapsed;
+    if (!mounted) return;
+    setState(() => _remaining = remaining.isNegative ? Duration.zero : remaining);
+    if (remaining <= Duration.zero && !_expiredPromptShown) {
+      _expiredPromptShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showExpiredPrompt());
+    }
+  }
+
+  Future<void> _showExpiredPrompt() async {
+    if (!mounted) return;
+    final keepWaiting = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Still there?'),
+        content: const Text(
+          'Your driver has been waiting and we haven\'t heard back. '
+          'Keep waiting a bit longer, or cancel the order?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel Order')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Keep Waiting')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (keepWaiting == true) {
+      // Give it one more full countdown before asking again.
+      setState(() {
+        _expiredPromptShown = false;
+        _remaining = _countdown;
+      });
+    } else {
+      widget.onTimeout();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final minutes = _remaining.inMinutes;
+    final seconds = _remaining.inSeconds % 60;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.danger.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.door_front_door_outlined, color: AppColors.danger, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Your driver is outside! Come to the door or your order may be returned.',
+                  style: AppTypography.label.copyWith(
+                    color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Time remaining: ${minutes}m ${seconds.toString().padLeft(2, '0')}s',
+            style: AppTypography.caption.copyWith(color: AppColors.danger, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: widget.onTimeout,
+                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                  child: const Text('Cancel Order'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: widget.onImOnMyWay,
+                  child: const Text('I\'m on my way'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// S14 — informational banner: the picked-up order has passed its ETA. No
+/// customer action needed, just transparency to cut down support pings.
+class _RunningLateBanner extends StatelessWidget {
+  final OrderModel order;
+
+  const _RunningLateBanner({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.schedule_rounded, color: AppColors.primary, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Your driver is running a little late. We\'re sorry for the wait!',
+              style: AppTypography.label.copyWith(
+                color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),

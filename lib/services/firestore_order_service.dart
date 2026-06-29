@@ -342,6 +342,18 @@ class FirestoreOrderService {
     });
   }
 
+  /// Customer's "I'm on my way" / "Please wait" response to a
+  /// `customerUnreachable` alert — clears the flag so the driver app's
+  /// `clearCustomerUnreachable()` watch (mirrored on that side) stops
+  /// waiting and resumes the normal hand-off flow.
+  Future<void> clearCustomerUnreachable(String orderId) async {
+    await _col.doc(orderId).update({
+      'customerUnreachable': false,
+      'customerUnreachableAt': FieldValue.delete(),
+      'customerUnreachableNote': FieldValue.delete(),
+    });
+  }
+
   /// Marks the escrow state of an order's wallet hold — 'held', 'captured', or 'released'.
   Future<void> updatePaymentStatus(String orderId, String paymentStatus) async {
     await _col.doc(orderId).update({'paymentStatus': paymentStatus});
@@ -631,6 +643,10 @@ class FirestoreOrderService {
       noDriversAvailable: d['noDriversAvailable'] as bool? ?? false,
       deliveryAddress: d['deliveryAddress'] as String?,
       scheduledFor: (d['scheduledFor'] as Timestamp?)?.toDate(),
+      customerUnreachable: d['customerUnreachable'] as bool? ?? false,
+      customerUnreachableAt: (d['customerUnreachableAt'] as Timestamp?)?.toDate(),
+      runningLate: d['runningLate'] as bool? ?? false,
+      runningLateAt: (d['runningLateAt'] as Timestamp?)?.toDate(),
     );
   }
 

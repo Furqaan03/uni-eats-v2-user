@@ -73,6 +73,15 @@ class OrderModel {
   // time (at least kScheduleLeadTime ahead of placing it) instead of ASAP.
   // Null means a normal, immediate order.
   final DateTime? scheduledFor;
+  // Driver is at the door and getting no response. Customer app surfaces a
+  // countdown + "I'm on my way"/"Cancel" prompt; clearing it writes this
+  // back to false (see FirestoreOrderService.clearCustomerUnreachable).
+  final bool customerUnreachable;
+  final DateTime? customerUnreachableAt;
+  // Picked-up order has passed its ETA + driver app's grace window.
+  // Informational only — no customer action required.
+  final bool runningLate;
+  final DateTime? runningLateAt;
 
   const OrderModel({
     required this.id,
@@ -99,6 +108,10 @@ class OrderModel {
     this.noDriversAvailable = false,
     this.deliveryAddress,
     this.scheduledFor,
+    this.customerUnreachable = false,
+    this.customerUnreachableAt,
+    this.runningLate = false,
+    this.runningLateAt,
   });
 
   OrderModel copyWith({
@@ -126,6 +139,10 @@ class OrderModel {
     bool? noDriversAvailable,
     String? deliveryAddress,
     DateTime? scheduledFor,
+    bool? customerUnreachable,
+    DateTime? customerUnreachableAt,
+    bool? runningLate,
+    DateTime? runningLateAt,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -152,6 +169,10 @@ class OrderModel {
       noDriversAvailable: noDriversAvailable ?? this.noDriversAvailable,
       deliveryAddress: deliveryAddress ?? this.deliveryAddress,
       scheduledFor: scheduledFor ?? this.scheduledFor,
+      customerUnreachable: customerUnreachable ?? this.customerUnreachable,
+      customerUnreachableAt: customerUnreachableAt ?? this.customerUnreachableAt,
+      runningLate: runningLate ?? this.runningLate,
+      runningLateAt: runningLateAt ?? this.runningLateAt,
     );
   }
 
