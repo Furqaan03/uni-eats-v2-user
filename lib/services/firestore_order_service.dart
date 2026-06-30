@@ -20,18 +20,20 @@ const kUseFirebase = true;
 const _kInFlightDeliveryStatuses = {'ready', 'assigned', 'driverArrived', 'pickedUp', 'enRoute'};
 
 // A driver counts as genuinely online only if their liveness heartbeat
-// (`lastActiveAt`, written by the driver app every 2 min while online) is more
+// (`lastActiveAt`, written by the driver app every 30s while online) is more
 // recent than this window. `isOnline == true` alone is NOT trusted: a driver
 // who kills the app, crashes, or loses signal never runs the graceful
 // "go offline" write, so their doc would otherwise stay isOnline=true forever —
 // a ghost driver that wrongly keeps the customer's Delivery option enabled with
-// nobody actually able to deliver. Allowing ~2 missed beats plus buffer.
-const _kDriverStaleAfter = Duration(minutes: 5);
+// nobody actually able to deliver. 90s tolerates ~2 missed 30s beats (a brief
+// network blip) while still disabling Delivery within ~1.5 min of a driver
+// vanishing without tapping "offline".
+const _kDriverStaleAfter = Duration(seconds: 90);
 
 // How often to recompute capacity from the last-known driver docs even when no
 // Firestore write fires, so the Delivery option still flips to disabled the
 // moment the final live driver's heartbeat ages out of [_kDriverStaleAfter].
-const _kCapacityReevalInterval = Duration(seconds: 30);
+const _kCapacityReevalInterval = Duration(seconds: 20);
 
 /// Live snapshot of campus delivery capacity, derived from real driver
 /// online-status and real in-flight delivery orders — not just "is anyone
@@ -60,6 +62,32 @@ class FirestoreOrderService {
 
   CollectionReference<Map<String, dynamic>> get _usersCol =>
       FirebaseFirestore.instance.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _restaurantsCol =>
+      FirebaseFirestore.instance.collection('restaurants');
+
+  /// Save/refresh this user's FCM device token (merge — never clobbers profile
+  /// fields). Used to deliver order-status push notifications to the customer.
+  Future<void> saveFcmToken(String uid, String token) async {
+    if (uid.isEmpty || token.isEmpty) return;
+    await _usersCol.doc(uid).set({'fcmToken': token}, SetOptions(merge: true));
+  }
+
+  /// Remove the token on logout so a signed-out device stops receiving this
+  /// user's notifications.
+  Future<void> clearFcmToken(String uid) async {
+    if (uid.isEmpty) return;
+    await _usersCol.doc(uid).set({'fcmToken': FieldValue.delete()}, SetOptions(merge: true));
+  }
+
+  /// The vendor's push token, stored on its restaurant doc by the vendor app —
+  /// lets the customer notify the restaurant when a new order is placed.
+  Future<String?> fetchVendorFcmToken(String vendorId) async {
+    if (vendorId.isEmpty) return null;
+    final snap = await _restaurantsCol.doc(vendorId).get();
+    final token = snap.data()?['fcmToken'];
+    return token is String && token.isNotEmpty ? token : null;
+  }
 
   // Maps a lowercased email or university ID to the uid that owns it, so a
   // wallet transfer can resolve a recipient without querying `users`
@@ -160,10 +188,21 @@ class FirestoreOrderService {
       return now.difference(ts.toDate()) < _kDriverStaleAfter;
     }).length;
 
-    final ordersSnap = await _col.where('orderType', isEqualTo: 'delivery').get();
-    final inFlight = ordersSnap.docs
-        .where((d) => _kInFlightDeliveryStatuses.contains(d.data()['status'] as String?))
-        .length;
+    // Reading every delivery order is denied for a normal customer by the
+    // hardened rules (they may only read their own orders). FAIL OPEN: if we
+    // can't compute the global in-flight count, assume none — so the gate falls
+    // back to "is any driver online", never blocking (or hanging) order
+    // placement on a permission error. Without this the query throws and the
+    // place-order button stays stuck loading forever.
+    int inFlight = 0;
+    try {
+      final ordersSnap = await _col.where('orderType', isEqualTo: 'delivery').get();
+      inFlight = ordersSnap.docs
+          .where((d) => _kInFlightDeliveryStatuses.contains(d.data()['status'] as String?))
+          .length;
+    } catch (_) {
+      inFlight = 0;
+    }
 
     return DeliveryCapacity(onlineDrivers: liveDrivers, inFlightOrders: inFlight);
   }

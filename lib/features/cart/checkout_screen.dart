@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../models/order_model.dart';
 import '../../models/restaurant_model.dart';
 import '../../services/firestore_order_service.dart';
 import '../../services/mock_data_service.dart';
+import '../../services/push/order_push.dart';
 import '../../utils/currency_formatter.dart';
 import '../home/providers/notifications_provider.dart';
 import '../orders/providers/orders_provider.dart';
@@ -867,14 +870,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         return;
       }
       if (kUseFirebase) {
-        final liveCapacity = await FirestoreOrderService.instance.fetchDeliveryCapacityOnce();
-        if (!liveCapacity.hasAnyDriver) {
-          UniToast.show(context, 'No drivers are available right now — switched you to Pickup.');
-          setState(() {
-            _deliveryType = DeliveryType.pickup;
-            _isPlacingOrder = false;
-          });
-          return;
+        // Never let a capacity-check failure strand the place-order button on a
+        // spinner — if the check itself errors, fall through and let the order
+        // proceed rather than hanging.
+        try {
+          final liveCapacity = await FirestoreOrderService.instance.fetchDeliveryCapacityOnce();
+          if (!liveCapacity.hasAnyDriver) {
+            UniToast.show(context, 'No drivers are available right now — switched you to Pickup.');
+            setState(() {
+              _deliveryType = DeliveryType.pickup;
+              _isPlacingOrder = false;
+            });
+            return;
+          }
+        } catch (e) {
+          debugPrint('[checkout] delivery capacity check failed, proceeding: $e');
         }
       }
     }
@@ -966,6 +976,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           deliveryAddress: order.deliveryAddress,
           scheduledFor: _scheduledFor,
         );
+        // Loud push to the restaurant that a new order arrived. Fire-and-forget
+        // — never block or fail the order on a notification.
+        unawaited(OrderPush.notifyVendorNewOrder(
+          vendorId: restaurantId,
+          orderId: orderId,
+          orderNumber: orderNumber,
+          itemCount: cart.fold(0, (sum, ci) => sum + ci.quantity),
+          total: total,
+        ));
       } catch (e) {
         // Order is still visible locally; Firestore write failed silently here.
         // In production this should queue a retry.

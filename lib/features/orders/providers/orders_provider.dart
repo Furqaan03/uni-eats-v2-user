@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/order_model.dart';
 import '../../../models/user_model.dart';
 import '../../../services/firestore_order_service.dart';
+import '../../../services/push/order_push.dart';
 import '../../../services/mock_data_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../home/providers/notifications_provider.dart';
@@ -272,6 +273,12 @@ class OrdersNotifier extends StateNotifier<List<OrderModel>> {
             .updatePaymentStatus(orderId, 'released')
             .catchError((e) => debugPrint('[Firestore] releaseHold failed: $e'));
       }
+      // Let the restaurant know the customer cancelled. Fire-and-forget.
+      OrderPush.notifyVendorCancelled(
+        vendorId: order.restaurantId,
+        orderId: orderId,
+        orderNumber: order.orderNumber,
+      ).catchError((e) => debugPrint('[push] notifyVendorCancelled failed: $e'));
     }
   }
 

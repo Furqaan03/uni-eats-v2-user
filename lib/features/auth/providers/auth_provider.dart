@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../../models/user_model.dart';
 import '../../../services/firestore_order_service.dart';
 import '../../../services/mock_data_service.dart';
+import '../../../services/push/notification_service.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, UserModel?>((ref) {
   return AuthNotifier(ref);
@@ -56,8 +57,20 @@ class AuthNotifier extends StateNotifier<UserModel?> {
   int _failedAttempts = 0;
   static const int _maxAttempts = 5;
 
+  // Last signed-in uid, kept so we can detach its push token on sign-out
+  // (fbUser is null by then).
+  String? _lastUid;
+
   Future<void> _onAuthStateChanged(fb.User? fbUser) async {
     if (fbUser == null) {
+      final goneUid = _lastUid;
+      _lastUid = null;
+      if (goneUid != null) {
+        // Stop delivering this user's order notifications to a signed-out device.
+        FirestoreOrderService.instance
+            .clearFcmToken(goneUid)
+            .catchError((e) => debugPrint('[push] clearFcmToken failed: $e'));
+      }
       state = null;
       // Reset the shared placeholder too — otherwise any screen reading it
       // directly (instead of authProvider) keeps showing the previous
@@ -95,11 +108,36 @@ class AuthNotifier extends StateNotifier<UserModel?> {
       }
       MockDataService.currentUser = profile;
       state = profile;
+      _lastUid = profile.id;
+      _registerPushToken(profile.id);
     } catch (e) {
       debugPrint('[Auth] profile fetch failed: $e');
     } finally {
       _ref.read(authLoadingProvider.notifier).state = false;
     }
+  }
+
+  // Save the device's FCM token to this user's doc and keep it fresh on
+  // rotation, so order-status push notifications reach them. Best-effort.
+  bool _pushRefreshHooked = false;
+  void _registerPushToken(String uid) {
+    NotificationService.instance.currentToken().then((token) {
+      if (token != null && token.isNotEmpty) {
+        FirestoreOrderService.instance
+            .saveFcmToken(uid, token)
+            .catchError((e) => debugPrint('[push] saveFcmToken failed: $e'));
+      }
+    });
+    if (_pushRefreshHooked) return;
+    _pushRefreshHooked = true;
+    NotificationService.instance.onTokenRefresh((token) {
+      final current = state?.id;
+      if (current != null && current.isNotEmpty) {
+        FirestoreOrderService.instance
+            .saveFcmToken(current, token)
+            .catchError((e) => debugPrint('[push] saveFcmToken refresh failed: $e'));
+      }
+    });
   }
 
   // Test phase: any well-formed email, any password Firebase accepts
