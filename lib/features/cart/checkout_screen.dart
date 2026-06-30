@@ -354,12 +354,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             )?.offersDelivery ??
             true);
 
-    final capacity = ref.watch(deliveryCapacityProvider).valueOrNull;
-    // Hard block only when literally nobody is online — soft-warn instead of
-    // blocking when drivers are online but stretched thin, so a borderline
-    // case doesn't lose the order outright.
-    final deliveryBlocked =
-        !restaurantOffersDelivery || (capacity != null && !capacity.hasAnyDriver);
+    final capacityAsync = ref.watch(deliveryCapacityProvider);
+    final capacity = capacityAsync.valueOrNull;
+    // Delivery is only offered when we have a CONFIRMED live driver. Anything
+    // else blocks it: restaurant doesn't deliver, no live driver, or the
+    // capacity signal is still loading / errored (capacity == null). We
+    // deliberately fail closed on the unknown state so a transient stream error
+    // or reconnect can never silently re-enable Delivery with nobody able to
+    // fulfil it — the recurring "it works then breaks again" bug. Soft-warn
+    // (don't block) only when drivers are confirmed online but stretched thin.
+    final deliveryBlocked = !restaurantOffersDelivery ||
+        capacity == null ||
+        !capacity.hasAnyDriver;
     final deliveryTight = capacity != null && capacity.hasAnyDriver && !capacity.hasCapacity;
     if (deliveryBlocked && _deliveryType == DeliveryType.delivery) {
       // Auto-switch to Pickup rather than leaving an unselectable option
@@ -403,7 +409,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   title: 'Delivery',
                   subtitle: !restaurantOffersDelivery
                       ? 'This restaurant doesn\'t offer delivery'
-                      : deliveryBlocked
+                      : (capacity == null && capacityAsync.isLoading)
+                          ? 'Checking driver availability…'
+                          : deliveryBlocked
                           ? 'No drivers available right now'
                           : deliveryTight
                               ? 'Drivers are busy — delivery may be delayed'
@@ -859,7 +867,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         return;
       }
       if (kUseFirebase) {
-        final liveCapacity = await FirestoreOrderService.instance.streamDeliveryCapacity().first;
+        final liveCapacity = await FirestoreOrderService.instance.fetchDeliveryCapacityOnce();
         if (!liveCapacity.hasAnyDriver) {
           UniToast.show(context, 'No drivers are available right now — switched you to Pickup.');
           setState(() {

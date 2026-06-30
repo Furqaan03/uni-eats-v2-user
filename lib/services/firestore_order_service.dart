@@ -19,6 +19,20 @@ const kUseFirebase = true;
 // driver's capacity" — mirrors the lifecycle written by the driver/vendor apps.
 const _kInFlightDeliveryStatuses = {'ready', 'assigned', 'driverArrived', 'pickedUp', 'enRoute'};
 
+// A driver counts as genuinely online only if their liveness heartbeat
+// (`lastActiveAt`, written by the driver app every 2 min while online) is more
+// recent than this window. `isOnline == true` alone is NOT trusted: a driver
+// who kills the app, crashes, or loses signal never runs the graceful
+// "go offline" write, so their doc would otherwise stay isOnline=true forever —
+// a ghost driver that wrongly keeps the customer's Delivery option enabled with
+// nobody actually able to deliver. Allowing ~2 missed beats plus buffer.
+const _kDriverStaleAfter = Duration(minutes: 5);
+
+// How often to recompute capacity from the last-known driver docs even when no
+// Firestore write fires, so the Delivery option still flips to disabled the
+// moment the final live driver's heartbeat ages out of [_kDriverStaleAfter].
+const _kCapacityReevalInterval = Duration(seconds: 30);
+
 /// Live snapshot of campus delivery capacity, derived from real driver
 /// online-status and real in-flight delivery orders — not just "is anyone
 /// online" (which doesn't account for drivers already maxed out).
@@ -70,10 +84,34 @@ class FirestoreOrderService {
   /// index for what's a small, campus-scale dataset.
   Stream<DeliveryCapacity> streamDeliveryCapacity() {
     late StreamController<DeliveryCapacity> controller;
-    int onlineDrivers = 0;
+    // Last-known driver docs flagged isOnline=true, kept so the periodic
+    // re-eval timer can re-count live drivers as heartbeats age out without a
+    // new Firestore event firing.
+    List<Map<String, dynamic>> driverDocs = const [];
     int inFlightOrders = 0;
     StreamSubscription? driversSub;
     StreamSubscription? ordersSub;
+    Timer? reevalTimer;
+
+    // Count only drivers whose heartbeat is fresh — a driver flagged online but
+    // silent past [_kDriverStaleAfter] is a ghost (app died / lost signal) and
+    // must not keep Delivery enabled.
+    int liveDriverCount() {
+      final now = DateTime.now();
+      return driverDocs.where((d) {
+        final ts = d['lastActiveAt'];
+        if (ts is! Timestamp) return false; // never sent a heartbeat → treat as offline
+        return now.difference(ts.toDate()) < _kDriverStaleAfter;
+      }).length;
+    }
+
+    void emit() {
+      if (controller.isClosed) return;
+      controller.add(DeliveryCapacity(
+        onlineDrivers: liveDriverCount(),
+        inFlightOrders: inFlightOrders,
+      ));
+    }
 
     controller = StreamController<DeliveryCapacity>.broadcast(
       onListen: () {
@@ -82,23 +120,52 @@ class FirestoreOrderService {
             .where('isOnline', isEqualTo: true)
             .snapshots()
             .listen((snap) {
-          onlineDrivers = snap.docs.length;
-          controller.add(DeliveryCapacity(onlineDrivers: onlineDrivers, inFlightOrders: inFlightOrders));
+          driverDocs = snap.docs.map((d) => d.data()).toList();
+          emit();
         }, onError: (Object e) => controller.addError(e));
 
         ordersSub = _col.where('orderType', isEqualTo: 'delivery').snapshots().listen((snap) {
           inFlightOrders = snap.docs
               .where((d) => _kInFlightDeliveryStatuses.contains(d.data()['status'] as String?))
               .length;
-          controller.add(DeliveryCapacity(onlineDrivers: onlineDrivers, inFlightOrders: inFlightOrders));
+          emit();
         }, onError: (Object e) => controller.addError(e));
+
+        // Re-evaluate on a timer so Delivery flips to disabled when the last
+        // live driver's heartbeat expires, even with no intervening write.
+        reevalTimer = Timer.periodic(_kCapacityReevalInterval, (_) => emit());
       },
       onCancel: () async {
+        reevalTimer?.cancel();
         await driversSub?.cancel();
         await ordersSub?.cancel();
       },
     );
     return controller.stream;
+  }
+
+  /// One-shot, race-free capacity read for the moment of placing an order —
+  /// avoids depending on which of the live stream's two snapshots happens to
+  /// arrive first. Applies the same heartbeat-freshness filter as the stream so
+  /// a ghost driver (isOnline=true but silent) is never counted.
+  Future<DeliveryCapacity> fetchDeliveryCapacityOnce() async {
+    final driversSnap = await FirebaseFirestore.instance
+        .collection('drivers')
+        .where('isOnline', isEqualTo: true)
+        .get();
+    final now = DateTime.now();
+    final liveDrivers = driversSnap.docs.where((d) {
+      final ts = d.data()['lastActiveAt'];
+      if (ts is! Timestamp) return false;
+      return now.difference(ts.toDate()) < _kDriverStaleAfter;
+    }).length;
+
+    final ordersSnap = await _col.where('orderType', isEqualTo: 'delivery').get();
+    final inFlight = ordersSnap.docs
+        .where((d) => _kInFlightDeliveryStatuses.contains(d.data()['status'] as String?))
+        .length;
+
+    return DeliveryCapacity(onlineDrivers: liveDrivers, inFlightOrders: inFlight);
   }
 
   /// Fetch the Firestore profile for an authenticated user, if it exists.
