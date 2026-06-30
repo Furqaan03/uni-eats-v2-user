@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/widgets/pill_nav.dart';
 import '../features/cart/providers/cart_provider.dart';
+import '../features/cart/widgets/resume_cart_prompt.dart';
 
 class DashboardShell extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -18,6 +19,20 @@ class DashboardShell extends ConsumerStatefulWidget {
 class _DashboardShellState extends ConsumerState<DashboardShell> {
   int _lastKnownIndex = 0;
   final List<int> _history = [0];
+  bool _checkedResumeCart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // One-shot, fires once the dashboard (i.e. a real app session, post-auth)
+    // first mounts — covers exactly the "reopened after a force-close" case
+    // without re-prompting on every tab switch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _checkedResumeCart) return;
+      _checkedResumeCart = true;
+      maybeShowResumeCartPrompt(context, ref);
+    });
+  }
 
   void _recordVisit(int index) {
     if (index == _lastKnownIndex) return;
