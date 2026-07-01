@@ -124,9 +124,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            // Give the Column at least the viewport height so the trailing
+            // Spacer fills a BOUNDED space (pinning the footer to the bottom)
+            // rather than an infinite one. A Spacer/Expanded directly inside a
+            // SingleChildScrollView otherwise asserts "non-zero flex but
+            // unbounded height" — which surfaced on a device whose first frame
+            // laid out with a degenerate (zero) size. IntrinsicHeight lets the
+            // Column grow past the viewport and scroll when content is taller.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 60),
@@ -232,6 +243,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
             ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
