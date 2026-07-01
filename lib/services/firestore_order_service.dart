@@ -16,6 +16,20 @@ import 'push/notification_service.dart';
 // See PLAN.md for full setup instructions.
 const kUseFirebase = true;
 
+/// Data environment (mirrors the admin dashboard's Live/Test switch).
+///   test → unprefixed collections (all current data). Default.
+///   live → `live_`-prefixed collections (real launch data), kept fully separate.
+/// Flip [current] to [DataEnv.live] at real launch. Only TOP-LEVEL collection
+/// names are prefixed — subcollections inherit their parent's namespace.
+enum DataEnv { test, live }
+
+class AppEnv {
+  AppEnv._();
+  static const DataEnv current = DataEnv.test;
+  static String get _prefix => current == DataEnv.live ? 'live_' : '';
+  static String col(String name) => '$_prefix$name';
+}
+
 // Order statuses that mean "this delivery order is currently using up a
 // driver's capacity" — mirrors the lifecycle written by the driver/vendor apps.
 const _kInFlightDeliveryStatuses = {'ready', 'assigned', 'driverArrived', 'pickedUp', 'enRoute'};
@@ -59,13 +73,13 @@ class FirestoreOrderService {
   static final FirestoreOrderService instance = FirestoreOrderService._();
 
   CollectionReference<Map<String, dynamic>> get _col =>
-      FirebaseFirestore.instance.collection('orders');
+      FirebaseFirestore.instance.collection(AppEnv.col('orders'));
 
   CollectionReference<Map<String, dynamic>> get _usersCol =>
-      FirebaseFirestore.instance.collection('users');
+      FirebaseFirestore.instance.collection(AppEnv.col('users'));
 
   CollectionReference<Map<String, dynamic>> get _restaurantsCol =>
-      FirebaseFirestore.instance.collection('restaurants');
+      FirebaseFirestore.instance.collection(AppEnv.col('restaurants'));
 
   /// Save/refresh this user's FCM device token (merge — never clobbers profile
   /// fields). Uses arrayUnion so multiple devices for the SAME account coexist:
@@ -179,13 +193,13 @@ class FirestoreOrderService {
   // directly (rules restrict that collection's read to admin/self — see
   // firestore.rules). Holds only a uid pointer, no PII.
   CollectionReference<Map<String, dynamic>> get _directoryCol =>
-      FirebaseFirestore.instance.collection('userDirectory');
+      FirebaseFirestore.instance.collection(AppEnv.col('userDirectory'));
 
   CollectionReference<Map<String, dynamic>> get _vouchersCol =>
-      FirebaseFirestore.instance.collection('vouchers');
+      FirebaseFirestore.instance.collection(AppEnv.col('vouchers'));
 
   CollectionReference<Map<String, dynamic>> get _transfersCol =>
-      FirebaseFirestore.instance.collection('walletTransfers');
+      FirebaseFirestore.instance.collection(AppEnv.col('walletTransfers'));
 
   static String normalizeDirectoryKey(String raw) => raw.trim().toLowerCase();
 
@@ -229,7 +243,7 @@ class FirestoreOrderService {
     controller = StreamController<DeliveryCapacity>.broadcast(
       onListen: () {
         driversSub = FirebaseFirestore.instance
-            .collection('drivers')
+            .collection(AppEnv.col('drivers'))
             .where('isOnline', isEqualTo: true)
             .snapshots()
             .listen((snap) {
@@ -263,7 +277,7 @@ class FirestoreOrderService {
   /// a ghost driver (isOnline=true but silent) is never counted.
   Future<DeliveryCapacity> fetchDeliveryCapacityOnce() async {
     final driversSnap = await FirebaseFirestore.instance
-        .collection('drivers')
+        .collection(AppEnv.col('drivers'))
         .where('isOnline', isEqualTo: true)
         .get();
     final now = DateTime.now();
@@ -389,7 +403,7 @@ class FirestoreOrderService {
   }) async {
     final batch = FirebaseFirestore.instance.batch();
     batch.set(
-      FirebaseFirestore.instance.collection('wallets').doc(fromUserId),
+      FirebaseFirestore.instance.collection(AppEnv.col('wallets')).doc(fromUserId),
       {'balance': newSenderBalance},
       SetOptions(merge: true),
     );
@@ -423,7 +437,7 @@ class FirestoreOrderService {
   }) async {
     final batch = FirebaseFirestore.instance.batch();
     batch.set(
-      FirebaseFirestore.instance.collection('wallets').doc(toUserId),
+      FirebaseFirestore.instance.collection(AppEnv.col('wallets')).doc(toUserId),
       {'balance': newRecipientBalance},
       SetOptions(merge: true),
     );
@@ -564,7 +578,7 @@ class FirestoreOrderService {
     required int vendorRating,
     int? driverRating,
   }) async {
-    await FirebaseFirestore.instance.collection('ratings').doc(order.id).set({
+    await FirebaseFirestore.instance.collection(AppEnv.col('ratings')).doc(order.id).set({
       'orderId': order.id,
       'userId': order.userId,
       'vendorId': order.restaurantId,
@@ -577,7 +591,7 @@ class FirestoreOrderService {
 
   /// Fetch the persisted wallet balance for [userId], if any has ever been written.
   Future<double?> fetchWalletBalance(String userId) async {
-    final snap = await FirebaseFirestore.instance.collection('wallets').doc(userId).get();
+    final snap = await FirebaseFirestore.instance.collection(AppEnv.col('wallets')).doc(userId).get();
     final data = snap.data();
     return (data?['balance'] as num?)?.toDouble();
   }
@@ -585,14 +599,14 @@ class FirestoreOrderService {
   /// Persist the current wallet balance for [userId].
   Future<void> setWalletBalance(String userId, double balance) async {
     await FirebaseFirestore.instance
-        .collection('wallets')
+        .collection(AppEnv.col('wallets'))
         .doc(userId)
         .set({'balance': balance}, SetOptions(merge: true));
   }
 
   CollectionReference<Map<String, dynamic>> _walletTxCol(String userId) => FirebaseFirestore
       .instance
-      .collection('wallets')
+      .collection(AppEnv.col('wallets'))
       .doc(userId)
       .collection('transactions');
 
@@ -628,7 +642,7 @@ class FirestoreOrderService {
     final batch = FirebaseFirestore.instance.batch();
     batch.update(_col.doc(orderId), {'paymentStatus': 'captured'});
     batch.set(
-      FirebaseFirestore.instance.collection('wallets').doc(userId),
+      FirebaseFirestore.instance.collection(AppEnv.col('wallets')).doc(userId),
       {'balance': newBalance},
       SetOptions(merge: true),
     );
@@ -647,7 +661,7 @@ class FirestoreOrderService {
   }) async {
     final batch = FirebaseFirestore.instance.batch();
     batch.set(
-      FirebaseFirestore.instance.collection('wallets').doc(userId),
+      FirebaseFirestore.instance.collection(AppEnv.col('wallets')).doc(userId),
       {'balance': newBalance},
       SetOptions(merge: true),
     );
@@ -659,7 +673,7 @@ class FirestoreOrderService {
   /// Returns a map of itemId → isAvailable. Missing keys default to available.
   Stream<Map<String, bool>> streamMenuAvailability(String restaurantId) {
     return FirebaseFirestore.instance
-        .collection('menuAvailability')
+        .collection(AppEnv.col('menuAvailability'))
         .doc(restaurantId)
         .snapshots()
         .map((snap) {
@@ -677,7 +691,7 @@ class FirestoreOrderService {
   /// anything in Firestore at all — that's why this never reads as "empty"
   /// even before a single vendor has logged in.
   Stream<List<RestaurantModel>> streamRestaurants() {
-    return FirebaseFirestore.instance.collection('restaurants').snapshots().map((snap) {
+    return FirebaseFirestore.instance.collection(AppEnv.col('restaurants')).snapshots().map((snap) {
       final liveById = {for (final d in snap.docs) d.id: d.data()};
       return MockDataService.restaurants.map((base) {
         final live = liveById[base.id];
@@ -704,7 +718,7 @@ class FirestoreOrderService {
   /// for testing without needing every vendor to populate a real menu).
   Stream<List<MenuItemModel>> streamMenuItems(String restaurantId) {
     return FirebaseFirestore.instance
-        .collection('menus')
+        .collection(AppEnv.col('menus'))
         .doc(restaurantId)
         .collection('items')
         .snapshots()
@@ -734,7 +748,7 @@ class FirestoreOrderService {
   /// vendor app's dashboard toggles. Missing fields default to open/not-busy.
   Stream<Map<String, dynamic>?> streamRestaurantStatus(String restaurantId) {
     return FirebaseFirestore.instance
-        .collection('restaurants')
+        .collection(AppEnv.col('restaurants'))
         .doc(restaurantId)
         .snapshots()
         .map((snap) => snap.data());
