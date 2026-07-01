@@ -67,26 +67,65 @@ class FirestoreOrderService {
       FirebaseFirestore.instance.collection('restaurants');
 
   /// Save/refresh this user's FCM device token (merge — never clobbers profile
-  /// fields). Used to deliver order-status push notifications to the customer.
+  /// fields). Uses arrayUnion so multiple devices for the SAME account coexist:
+  /// a single `fcmToken` field meant each new login or token rotation
+  /// overwrote the previous device, so only the last writer ever received
+  /// pushes. Tokens accumulate in `fcmTokens` and every one is sent to.
   Future<void> saveFcmToken(String uid, String token) async {
     if (uid.isEmpty || token.isEmpty) return;
-    await _usersCol.doc(uid).set({'fcmToken': token}, SetOptions(merge: true));
+    await _usersCol.doc(uid).set({
+      'fcmTokens': FieldValue.arrayUnion([token]),
+    }, SetOptions(merge: true));
   }
 
-  /// Remove the token on logout so a signed-out device stops receiving this
-  /// user's notifications.
-  Future<void> clearFcmToken(String uid) async {
-    if (uid.isEmpty) return;
-    await _usersCol.doc(uid).set({'fcmToken': FieldValue.delete()}, SetOptions(merge: true));
+  /// Remove only THIS device's token on logout so the account's OTHER devices
+  /// keep receiving. Also drops the legacy single `fcmToken` field if present.
+  Future<void> clearFcmToken(String uid, String token) async {
+    if (uid.isEmpty || token.isEmpty) return;
+    await _usersCol.doc(uid).set({
+      'fcmTokens': FieldValue.arrayRemove([token]),
+      'fcmToken': FieldValue.delete(),
+    }, SetOptions(merge: true));
   }
 
-  /// The vendor's push token, stored on its restaurant doc by the vendor app —
-  /// lets the customer notify the restaurant when a new order is placed.
-  Future<String?> fetchVendorFcmToken(String vendorId) async {
-    if (vendorId.isEmpty) return null;
+  /// The vendor's push tokens, stored on its restaurant doc by the vendor app —
+  /// lets the customer notify every device the restaurant is signed in on when
+  /// a new order is placed. Includes the legacy single-field token for docs a
+  /// pre-multi-token build last wrote.
+  Future<List<String>> fetchVendorFcmTokens(String vendorId) async {
+    if (vendorId.isEmpty) return const [];
     final snap = await _restaurantsCol.doc(vendorId).get();
-    final token = snap.data()?['fcmToken'];
-    return token is String && token.isNotEmpty ? token : null;
+    return _tokensOf(snap.data());
+  }
+
+  /// This user's own device tokens, read from their own users doc (self-read
+  /// is permitted). Best-effort — returns empty if the doc/token isn't there
+  /// yet (e.g. token save hasn't landed), so order creation never fails over a
+  /// missing notification token.
+  Future<List<String>> _ownFcmTokens(String uid) async {
+    if (uid.isEmpty) return const [];
+    try {
+      final snap = await _usersCol.doc(uid).get();
+      return _tokensOf(snap.data());
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Extracts the device-token set from an entity doc — the `fcmTokens` array
+  /// plus any legacy single `fcmToken`, deduped.
+  static List<String> _tokensOf(Map<String, dynamic>? data) {
+    if (data == null) return const [];
+    final set = <String>{};
+    final arr = data['fcmTokens'];
+    if (arr is List) {
+      for (final t in arr) {
+        if (t is String && t.isNotEmpty) set.add(t);
+      }
+    }
+    final single = data['fcmToken'];
+    if (single is String && single.isNotEmpty) set.add(single);
+    return set.toList();
   }
 
   // Maps a lowercased email or university ID to the uid that owns it, so a
@@ -413,6 +452,12 @@ class FirestoreOrderService {
       'paymentStatus': 'held',
       'orderType': deliveryType == DeliveryType.pickup ? 'pickup' : 'delivery',
       'deliveryAddress': deliveryAddress,
+      // Snapshot the customer's device tokens onto the order so the vendor and
+      // the assigned driver can notify them WITHOUT reading users/{uid} — the
+      // users collection is self/admin-read only (see firestore.rules), so a
+      // cross-account token lookup there is denied. The order doc, by contrast,
+      // is readable by its vendor and assigned driver.
+      'customerFcmTokens': await _ownFcmTokens(userId),
       'createdAt': FieldValue.serverTimestamp(),
       'estimatedDelivery': estimatedDelivery != null
           ? Timestamp.fromDate(estimatedDelivery)

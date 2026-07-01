@@ -17,11 +17,11 @@ class OrderPush {
     required int itemCount,
     required double total,
   }) async {
-    final token = await FirestoreOrderService.instance.fetchVendorFcmToken(vendorId);
-    developer.log('[push] notifyVendorNewOrder vendorId=$vendorId token=${token == null ? 'NULL — vendor has no fcmToken saved' : 'present'}');
-    if (token == null) return;
-    await SendNotification.toToken(
-      token: token,
+    final tokens = await FirestoreOrderService.instance.fetchVendorFcmTokens(vendorId);
+    developer.log('[push] notifyVendorNewOrder vendorId=$vendorId tokens=${tokens.length}');
+    if (tokens.isEmpty) return;
+    await SendNotification.toTokens(
+      tokens: tokens,
       title: 'New order 🔔',
       body: 'Order $orderNumber — $itemCount item${itemCount == 1 ? '' : 's'}, '
           'Rs ${total.toStringAsFixed(0)}',
@@ -36,10 +36,10 @@ class OrderPush {
     required String orderId,
     required String orderNumber,
   }) async {
-    final token = await FirestoreOrderService.instance.fetchVendorFcmToken(vendorId);
-    if (token == null) return;
-    await SendNotification.toToken(
-      token: token,
+    final tokens = await FirestoreOrderService.instance.fetchVendorFcmTokens(vendorId);
+    if (tokens.isEmpty) return;
+    await SendNotification.toTokens(
+      tokens: tokens,
       title: 'Order cancelled',
       body: 'Order $orderNumber was cancelled by the customer.',
       data: {'orderId': orderId, 'type': 'order_cancelled'},

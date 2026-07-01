@@ -66,10 +66,15 @@ class AuthNotifier extends StateNotifier<UserModel?> {
       final goneUid = _lastUid;
       _lastUid = null;
       if (goneUid != null) {
-        // Stop delivering this user's order notifications to a signed-out device.
-        FirestoreOrderService.instance
-            .clearFcmToken(goneUid)
-            .catchError((e) => debugPrint('[push] clearFcmToken failed: $e'));
+        // Stop delivering this user's order notifications to THIS signed-out
+        // device only — detach just this device's token so the account's other
+        // devices keep receiving.
+        NotificationService.instance.currentToken().then((token) {
+          if (token == null || token.isEmpty) return;
+          FirestoreOrderService.instance
+              .clearFcmToken(goneUid, token)
+              .catchError((e) => debugPrint('[push] clearFcmToken failed: $e'));
+        });
       }
       state = null;
       // Reset the shared placeholder too — otherwise any screen reading it
