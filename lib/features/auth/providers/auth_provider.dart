@@ -9,6 +9,7 @@ import '../../../models/user_model.dart';
 import '../../../services/firestore_order_service.dart';
 import '../../../services/mock_data_service.dart';
 import '../../../services/push/notification_service.dart';
+import '../../home/providers/notifications_provider.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, UserModel?>((ref) {
   return AuthNotifier(ref);
@@ -77,6 +78,9 @@ class AuthNotifier extends StateNotifier<UserModel?> {
         });
       }
       state = null;
+      // Wipe the in-app notification center so a shared device doesn't show
+      // this user's notifications to whoever signs in next.
+      _ref.read(notificationsProvider.notifier).clearPersisted();
       // Reset the shared placeholder too — otherwise any screen reading it
       // directly (instead of authProvider) keeps showing the previous
       // signed-out user's id/name/email indefinitely.
