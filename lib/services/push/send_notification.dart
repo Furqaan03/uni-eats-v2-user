@@ -85,8 +85,6 @@ class SendNotification {
       );
       if (resp.statusCode >= 300) {
         developer.log('[push] send failed ${resp.statusCode}: ${resp.body}');
-      } else {
-        developer.log('[push] send OK ${resp.statusCode}');
       }
     } catch (e) {
       developer.log('[push] send error', error: e);

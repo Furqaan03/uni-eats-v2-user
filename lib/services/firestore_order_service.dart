@@ -89,6 +89,44 @@ class FirestoreOrderService {
     }, SetOptions(merge: true));
   }
 
+  /// Swap a rotated-away token for the new one in a single logical step:
+  /// prune the now-dead [oldToken] and add [newToken]. Keeps the `fcmTokens`
+  /// array from growing unbounded as FCM rotates this device's token over time.
+  /// (arrayUnion + arrayRemove can't touch the same field in one write, so this
+  /// is two merges.)
+  Future<void> replaceFcmToken(String uid, {String? oldToken, required String newToken}) async {
+    if (uid.isEmpty || newToken.isEmpty) return;
+    if (oldToken != null && oldToken.isNotEmpty && oldToken != newToken) {
+      await _usersCol.doc(uid).set({
+        'fcmTokens': FieldValue.arrayRemove([oldToken]),
+      }, SetOptions(merge: true));
+    }
+    await _usersCol.doc(uid).set({
+      'fcmTokens': FieldValue.arrayUnion([newToken]),
+    }, SetOptions(merge: true));
+  }
+
+  // Order statuses that are final — no further push updates are sent, so there
+  // is no point backfilling a device's token onto them.
+  static const _kTerminalOrderStatuses = {'delivered', 'completed', 'cancelled', 'rejected'};
+
+  /// Add [token] to `customerFcmTokens` on all of this user's IN-FLIGHT orders,
+  /// so a device that signed in after those orders were placed still receives
+  /// their lifecycle updates. The order doc — not users/{uid} — carries the
+  /// customer tokens because the vendor/driver can't read users/{uid} (see
+  /// firestore.rules); a scoped rule lets the owner update only this field.
+  Future<void> attachTokenToActiveOrders(String uid, String token) async {
+    if (uid.isEmpty || token.isEmpty) return;
+    final snap = await _col.where('userId', isEqualTo: uid).get();
+    for (final doc in snap.docs) {
+      final status = doc.data()['status'];
+      if (status is String && _kTerminalOrderStatuses.contains(status)) continue;
+      await doc.reference.set({
+        'customerFcmTokens': FieldValue.arrayUnion([token]),
+      }, SetOptions(merge: true));
+    }
+  }
+
   /// The vendor's push tokens, stored on its restaurant doc by the vendor app —
   /// lets the customer notify every device the restaurant is signed in on when
   /// a new order is placed. Includes the legacy single-field token for docs a

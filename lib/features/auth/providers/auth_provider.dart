@@ -125,25 +125,35 @@ class AuthNotifier extends StateNotifier<UserModel?> {
   // Save the device's FCM token to this user's doc and keep it fresh on
   // rotation, so order-status push notifications reach them. Best-effort.
   bool _pushRefreshHooked = false;
+  // Last token this device wrote to Firestore, so a rotation can prune the
+  // now-dead token from the array instead of letting it accumulate forever.
+  String? _lastPushToken;
   void _registerPushToken(String uid) {
     NotificationService.instance.currentToken().then((token) {
-      debugPrint('[push] currentToken for $uid => ${token == null ? 'NULL' : '${token.substring(0, 12)}… (len ${token.length})'}');
-      if (token != null && token.isNotEmpty) {
-        FirestoreOrderService.instance
-            .saveFcmToken(uid, token)
-            .then((_) => debugPrint('[push] saveFcmToken OK for $uid'))
-            .catchError((e) => debugPrint('[push] saveFcmToken failed: $e'));
-      }
+      if (token == null || token.isEmpty) return;
+      _lastPushToken = token;
+      FirestoreOrderService.instance
+          .saveFcmToken(uid, token)
+          .catchError((e) => debugPrint('[push] saveFcmToken failed: $e'));
+      // Backfill this device onto the user's in-flight orders too, so a device
+      // that signed in AFTER an order was placed still receives its updates.
+      FirestoreOrderService.instance
+          .attachTokenToActiveOrders(uid, token)
+          .catchError((e) => debugPrint('[push] attachTokenToActiveOrders failed: $e'));
     });
     if (_pushRefreshHooked) return;
     _pushRefreshHooked = true;
     NotificationService.instance.onTokenRefresh((token) {
       final current = state?.id;
-      if (current != null && current.isNotEmpty) {
-        FirestoreOrderService.instance
-            .saveFcmToken(current, token)
-            .catchError((e) => debugPrint('[push] saveFcmToken refresh failed: $e'));
-      }
+      if (current == null || current.isEmpty || token.isEmpty) return;
+      final old = _lastPushToken;
+      _lastPushToken = token;
+      FirestoreOrderService.instance
+          .replaceFcmToken(current, oldToken: old, newToken: token)
+          .catchError((e) => debugPrint('[push] replaceFcmToken failed: $e'));
+      FirestoreOrderService.instance
+          .attachTokenToActiveOrders(current, token)
+          .catchError((e) => debugPrint('[push] attachTokenToActiveOrders failed: $e'));
     });
   }
 
