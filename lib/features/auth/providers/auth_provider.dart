@@ -122,9 +122,11 @@ class AuthNotifier extends StateNotifier<UserModel?> {
   bool _pushRefreshHooked = false;
   void _registerPushToken(String uid) {
     NotificationService.instance.currentToken().then((token) {
+      debugPrint('[push] currentToken for $uid => ${token == null ? 'NULL' : '${token.substring(0, 12)}… (len ${token.length})'}');
       if (token != null && token.isNotEmpty) {
         FirestoreOrderService.instance
             .saveFcmToken(uid, token)
+            .then((_) => debugPrint('[push] saveFcmToken OK for $uid'))
             .catchError((e) => debugPrint('[push] saveFcmToken failed: $e'));
       }
     });

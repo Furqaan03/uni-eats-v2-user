@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import '../firestore_order_service.dart';
 import 'send_notification.dart';
 
@@ -16,6 +18,7 @@ class OrderPush {
     required double total,
   }) async {
     final token = await FirestoreOrderService.instance.fetchVendorFcmToken(vendorId);
+    developer.log('[push] notifyVendorNewOrder vendorId=$vendorId token=${token == null ? 'NULL — vendor has no fcmToken saved' : 'present'}');
     if (token == null) return;
     await SendNotification.toToken(
       token: token,

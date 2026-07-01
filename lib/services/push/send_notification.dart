@@ -50,24 +50,27 @@ class SendNotification {
     Map<String, String> data = const {},
   }) async {
     if (!PushConfig.isConfigured) {
-      developer.log('[push] skipped — serviceAccountJsonUrl not set');
+      developer.log('[push] skipped — serviceAccountAssetPath not set');
       return;
     }
     if (token.isEmpty) return;
 
+    // Deliberately data-only (no top-level `notification` block): Android
+    // only auto-displays `android.notification` overrides when a base
+    // `notification` block is also present, so a notification-block message
+    // here would either get silently swallowed in the background or shown
+    // twice (once by the OS, once by our own onMessage handler). Sending
+    // pure data and rendering it ourselves via flutter_local_notifications in
+    // both foreground and background keeps display logic in one place.
     final message = {
       'token': token,
-      'data': {...data, 'isNewOrder': loud ? 'true' : 'false'},
-      'android': {
-        'priority': 'high',
-        'notification': {
-          'channel_id': loud ? PushConfig.ordersChannelId : PushConfig.defaultChannelId,
-          'title': title,
-          'body': body,
-          if (loud) 'sound': PushConfig.orderSoundResource,
-          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
-        },
+      'data': {
+        ...data,
+        'title': title,
+        'body': body,
+        'isNewOrder': loud ? 'true' : 'false',
       },
+      'android': {'priority': 'high'},
     };
 
     try {
@@ -82,6 +85,8 @@ class SendNotification {
       );
       if (resp.statusCode >= 300) {
         developer.log('[push] send failed ${resp.statusCode}: ${resp.body}');
+      } else {
+        developer.log('[push] send OK ${resp.statusCode}');
       }
     } catch (e) {
       developer.log('[push] send error', error: e);

@@ -1,9 +1,7 @@
 /// Configuration for client-side FCM push (see NOTIFICATIONS_PLAN.md).
 ///
 /// Sending uses the FCM HTTP v1 API authenticated by a Firebase service
-/// account. The service-account JSON is NOT bundled in the app — it's fetched
-/// at runtime from [serviceAccountJsonUrl] so it can be rotated without a
-/// release. Set that URL to a hosted copy of the project's service-account key.
+/// account, bundled as a local git-ignored asset (see [serviceAccountAssetPath]).
 class PushConfig {
   PushConfig._();
 
