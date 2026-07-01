@@ -10,6 +10,7 @@ import '../models/restaurant_model.dart';
 import '../models/user_model.dart';
 import '../models/wallet_transaction_model.dart';
 import 'mock_data_service.dart';
+import 'push/notification_service.dart';
 
 // Set to true after running `flutterfire configure` and adding google-services.json.
 // See PLAN.md for full setup instructions.
@@ -104,12 +105,19 @@ class FirestoreOrderService {
   /// missing notification token.
   Future<List<String>> _ownFcmTokens(String uid) async {
     if (uid.isEmpty) return const [];
+    final set = <String>{};
+    // Live device token first — covers the login→order race where the async
+    // saveFcmToken write hasn't landed in the users doc yet, so this device
+    // would otherwise be missing from the order's embedded token set.
+    try {
+      final live = await NotificationService.instance.currentToken();
+      if (live != null && live.isNotEmpty) set.add(live);
+    } catch (_) {/* ignore — fall through to the persisted set */}
     try {
       final snap = await _usersCol.doc(uid).get();
-      return _tokensOf(snap.data());
-    } catch (_) {
-      return const [];
-    }
+      set.addAll(_tokensOf(snap.data()));
+    } catch (_) {/* ignore — live token (if any) still covers this device */}
+    return set.toList();
   }
 
   /// Extracts the device-token set from an entity doc — the `fcmTokens` array
